@@ -63,17 +63,18 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-app.UseAntiforgery();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseAntiforgery();
 
 app.MapGet("/login", () => Results.Challenge(
     new AuthenticationProperties { RedirectUri = "/dashboard" },
     [OpenIdConnectDefaults.AuthenticationScheme]));
 
-app.MapGet("/logout", () => Results.SignOut(
+app.MapPost("/logout", () => Results.SignOut(
     new AuthenticationProperties { RedirectUri = "/" },
-    [CookieAuthenticationDefaults.AuthenticationScheme]));
+    [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]))
+    .RequireAuthorization();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
