@@ -4,4 +4,7 @@
 <PageTitle>COA Dashboard</PageTitle>
 <h1>Dashboard</h1>
 <p>Authentication is active. Profile and opportunities will follow.</p>
-<a href="/logout">Sign out locally</a>
+<form method="post" action="/logout">
+    <AntiforgeryToken />
+    <button type="submit">Sign out</button>
+</form>
