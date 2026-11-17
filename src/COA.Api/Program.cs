@@ -1,14 +1,18 @@
+using System.Text.Json.Serialization;
 using COA.Application.Matching;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
 var app = builder.Build();
 
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 
-// MVP synthetic-data vertical slice; this endpoint does not persist or submit applications.
+// Synthetic-data bootstrap only. This endpoint does not persist or submit applications.
 app.MapPost("/api/matching/evaluate", (EvaluateMatchRequest? request) =>
 {
-    if (request is null || request.Criteria is null)
+    if (request?.Criteria is null)
         return Results.BadRequest(new { error = "Criteria are required." });
 
     try
