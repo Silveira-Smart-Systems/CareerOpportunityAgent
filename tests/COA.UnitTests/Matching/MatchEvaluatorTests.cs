@@ -19,7 +19,9 @@ public sealed class MatchEvaluatorTests
         var first = MatchEvaluator.Evaluate(input);
         var second = MatchEvaluator.Evaluate(input);
         Assert.Equal(65m, first.Score);
-        Assert.Equal(first, second);
+        Assert.Equal(first.Score, second.Score);
+        Assert.Equal(first.Eligible, second.Eligible);
+        Assert.Equal(first.Criteria, second.Criteria);
         Assert.True(first.Eligible);
     }
 
