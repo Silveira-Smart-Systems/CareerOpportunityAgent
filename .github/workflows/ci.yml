@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  repository-hygiene:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check whitespace and conflict markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check HEAD^ HEAD 2>/dev/null || git diff --check
+          if git grep -n -E '^(<<<<<<< |=======|>>>>>>> )' -- ':!*.lock'; then
+            echo "Unresolved merge conflict marker detected."
+            exit 1
+          fi
+      - name: Check prohibited tracked files
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -Ei '(^|/)(\.env(\..*)?|secrets\.json|[^/]+\.(pfx|p12|pem|key))$'; then
+            echo "Potential secrets file tracked."
+            exit 1
+          fi
+      - name: Validate documentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f CONTRIBUTING.md
+          test -f docs/engineering/quality-gates.md
+
+  dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect .NET solution
+        id: solution
+        shell: bash
+        run: |
+          set -euo pipefail
+          solution=$(find . -maxdepth 3 -type f \( -name '*.sln' -o -name '*.slnx' \) | sort | head -n 1)
+          if [[ -n "$solution" ]]; then
+            echo "path=$solution" >> "$GITHUB_OUTPUT"
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No .NET solution yet: build/test not executed."
+          fi
+      - uses: actions/setup-dotnet@v4
+        if: steps.solution.outputs.found == 'true'
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore
+        if: steps.solution.outputs.found == 'true'
+        run: dotnet restore "${{ steps.solution.outputs.path }}"
+      - name: Build
+        if: steps.solution.outputs.found == 'true'
+        run: dotnet build "${{ steps.solution.outputs.path }}" --configuration Release --no-restore
+      - name: Test
+        if: steps.solution.outputs.found == 'true'
+        run: dotnet test "${{ steps.solution.outputs.path }}" --configuration Release --no-build
