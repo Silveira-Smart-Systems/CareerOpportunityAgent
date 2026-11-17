@@ -18,7 +18,7 @@ Requires .NET 10 SDK.
 dotnet restore COA.slnx
 dotnet build COA.slnx --configuration Release --no-restore
 dotnet test COA.slnx --configuration Release --no-build
-dotnet run --project src/COA.Api
+dotnet run --project src/COA.Api --urls http://localhost:5000
 ```
 
 ## Example synthetic request
@@ -27,7 +27,8 @@ curl -X POST http://localhost:5000/api/matching/evaluate \
   -H 'Content-Type: application/json' \
   -d '{"criteria":[{"code":"technical","evidence":"Matched","weight":40},{"code":"remote","evidence":"Missing","weight":60,"isHardConstraint":true}]}'
 ```
-Note: enum values serialize as numbers by default unless JSON enum string conversion is configured. The current example uses string values as the intended API contract; implementation must configure string enum conversion before this example works.
+
+The expected result is score 40, eligible false. Evidence enums use JSON string conversion.
 
 ## Next gates
 - CI must actually pass; no local .NET SDK was available to the authoring environment.
