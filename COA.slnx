@@ -3,6 +3,7 @@
     <Project Path="src/COA.Domain/COA.Domain.csproj" />
     <Project Path="src/COA.Application/COA.Application.csproj" />
     <Project Path="src/COA.Api/COA.Api.csproj" />
+    <Project Path="src/COA.Web/COA.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/COA.UnitTests/COA.UnitTests.csproj" />

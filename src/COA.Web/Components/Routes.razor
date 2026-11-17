@@ -1,0 +1,14 @@
+<CascadingAuthenticationState>
+    <Router AppAssembly="@typeof(Program).Assembly">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="@routeData">
+                <NotAuthorized>
+                    <p>Authentication required. <a href="/login">Sign in with Auth0</a>.</p>
+                </NotAuthorized>
+            </AuthorizeRouteView>
+        </Found>
+        <NotFound>
+            <p>Page not found.</p>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>
