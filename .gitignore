@@ -1,0 +1,32 @@
+# .NET
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+
+# React / Node
+**/node_modules/
+**/dist/
+**/.next/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+**/secrets.json
+**/appsettings.*.local.json
+*.pfx
+*.p12
+*.pem
+*.key
+
+# Local tooling
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
