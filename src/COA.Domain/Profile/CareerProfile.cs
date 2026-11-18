@@ -40,6 +40,8 @@ public sealed record CareerPreferences(
             throw new ArgumentException("RemoteOnly requires Remote preferred arrangement.");
         if (MinimumHourlyRate is < 0 or > 100000)
             throw new ArgumentException("Minimum hourly rate is outside supported range.");
+        if (MinimumHourlyRate.HasValue && MinimumHourlyRate.Value % 0.01m != 0)
+            throw new ArgumentException("Minimum hourly rate supports at most two decimal places.");
         if (MinimumHourlyRate.HasValue && (Currency is null || Currency.Length != 3 ||
             !Currency.All(char.IsLetter)))
             throw new ArgumentException("Three-letter currency is required with minimum rate.");
