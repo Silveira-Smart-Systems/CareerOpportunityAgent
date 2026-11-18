@@ -11,6 +11,8 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Xunit;
@@ -48,10 +50,12 @@ public sealed class ApiAuthenticationTests : IClassFixture<ApiAuthenticationFact
     {
         var services = new ServiceCollection();
         var configuration = new ConfigurationBuilder().Build();
-        var environment = new WebHostEnvironment { EnvironmentName = "Production" };
+        var environment = new TestHostEnvironment();
 
         Assert.Throws<InvalidOperationException>(() =>
-            services.AddApiJwtBearerAuthentication(configuration, environment));
+        {
+            services.AddApiJwtBearerAuthentication(configuration, environment);
+        });
     }
 
     [Fact]
@@ -131,6 +135,14 @@ public sealed class ApiAuthenticationTests : IClassFixture<ApiAuthenticationFact
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return await client.GetAsync("/api/me");
     }
+}
+
+public sealed class TestHostEnvironment : IHostEnvironment
+{
+    public string EnvironmentName { get; set; } = "Production";
+    public string ApplicationName { get; set; } = "COA.UnitTests";
+    public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+    public IFileProvider ContentRootFileProvider { get; set; } = NullFileProvider.Instance;
 }
 
 public sealed class ApiAuthenticationFactory : WebApplicationFactory<global::Program>
