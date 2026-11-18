@@ -36,7 +36,7 @@ Tracking: #20, #23; ADR-0010, ADR-0011. Do not store real tenant details or toke
 }
 ```
 
-No client secret belongs in the SPA. Tenant domain, client ID and API audience are public configuration, but secrets and access tokens must remain protected.
+No client secret belongs in browser code. Tenant domain, client ID and API audience are public configuration, but secrets and access tokens must remain protected.
 
 ## Tests / approval gates
 - Missing token => 401; wrong issuer/audience/signature/expired token => 401.

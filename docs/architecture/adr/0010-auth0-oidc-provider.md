@@ -6,12 +6,12 @@
 - **Related:** ADR-0009, #14
 
 ## Context
-COA stores private career data. The MVP needs secure authentication without maintaining passwords, registration and password recovery infrastructure. React SPA and ASP.NET Core 10 API are the current stack.
+COA stores private career data. The MVP needs secure authentication without maintaining passwords, registration and password recovery infrastructure. ADR-0011 selects a Blazor Web App for authenticated screens while retaining a separate ASP.NET Core API.
 
 ## Decision
-Use **Auth0** as the initial OIDC provider. Register a **Single Page Application** and a distinct **API resource**. React signs users in using Authorization Code + PKCE and requests an access token with the API's configured audience. The ASP.NET Core API uses standard `Microsoft.AspNetCore.Authentication.JwtBearer` validation with strict issuer, audience, signature, expiry, and HTTPS metadata checks. Never use an ID token as an API bearer token.
+Use **Auth0** as the initial OIDC provider. COA Web is a confidential Regular Web Application using server-side OpenID Connect, Authorization Code + PKCE, and an HttpOnly Secure cookie session. Register a distinct API resource. The ASP.NET Core API uses standard `Microsoft.AspNetCore.Authentication.JwtBearer` validation with strict issuer, audience, signature, expiry, and HTTPS metadata checks. Never use an ID token as an API bearer token.
 
-For the MVP, keep access tokens in memory rather than browser localStorage. Use short token lifetimes, strict CORS allowlists and HTTPS. Evaluate a confidential Backend-for-Frontend (BFF) with HttpOnly, Secure, SameSite cookies before public beta, especially if browser token exposure or XSS risk requires it.
+COA Web calls Application directly for server-side screens and does not persist browser access tokens. API clients use access tokens for the API audience. Evaluate a BFF-like boundary and distributed session/data-protection concerns before public beta.
 
 Identify profile owners by the validated tuple `(iss, sub)` rather than email or a client-supplied user ID. Application authorization checks ownership on every profile operation. Reject unauthenticated access and avoid leaking whether another user's profile exists.
 
@@ -24,7 +24,7 @@ Auth0 configuration belongs in environment configuration. Domain and Application
 - BFF immediately: more secure browser token boundary but introduces session/CSRF/cookie and deployment complexity; reconsider before public beta.
 
 ## Consequences
-Requires Auth0 tenant, SPA registration, API audience, callback/logout/origin allowlists, token validation and integration tests. The free plan is an initial commercial hypothesis, not a guaranteed entitlement. Provider-specific claims/quotas must not leak into Domain.
+Requires Auth0 tenant, Regular Web Application registration, API audience, callback/logout/origin allowlists, token validation and integration tests. The free plan is an initial commercial hypothesis, not a guaranteed entitlement. Provider-specific claims/quotas must not leak into Domain.
 
 ## Security requirements
 - Never commit tenant credentials or real tokens.
