@@ -142,7 +142,7 @@ public sealed class TestHostEnvironment : IHostEnvironment
     public string EnvironmentName { get; set; } = "Production";
     public string ApplicationName { get; set; } = "COA.UnitTests";
     public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
-    public IFileProvider ContentRootFileProvider { get; set; } = NullFileProvider.Instance;
+    public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
 }
 
 public sealed class ApiAuthenticationFactory : WebApplicationFactory<global::Program>
