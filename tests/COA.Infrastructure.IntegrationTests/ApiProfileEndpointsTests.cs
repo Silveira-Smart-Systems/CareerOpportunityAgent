@@ -152,7 +152,6 @@ public sealed class ApiProfileFactory : WebApplicationFactory<global::Program>
     public ApiProfileFactory(string connectionString)
     {
         _connectionString = connectionString;
-        Environment.SetEnvironmentVariable("ConnectionStrings__COA", connectionString);
     }
 
     public string CreateToken(string? subject, SecurityKey? signingKey = null, IEnumerable<Claim>? extraClaims = null)
