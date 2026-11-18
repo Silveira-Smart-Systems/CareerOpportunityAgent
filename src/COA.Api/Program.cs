@@ -11,13 +11,8 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("COA");
 if (string.IsNullOrWhiteSpace(connectionString))
 {
-    if (builder.Environment.IsEnvironment("Testing"))
-        connectionString = "Server=(localdb)\\MSSQLLocalDB;Database=COA_Testing_Only;Trusted_Connection=True";
-    else
-    {
     throw new InvalidOperationException(
         "ConnectionStrings:COA must be configured through a secure environment or secret store.");
-    }
 }
 
 builder.Services.AddProblemDetails();

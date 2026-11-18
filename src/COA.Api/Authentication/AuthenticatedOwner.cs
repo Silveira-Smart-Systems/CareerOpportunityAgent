@@ -100,8 +100,14 @@ public sealed record AuthenticatedOwner(string Issuer, string Subject)
 
             var issuerCount = 0;
             var subjectCount = 0;
-            while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+            var completedRootObject = false;
+            while (reader.Read())
             {
+                if (reader.TokenType == JsonTokenType.EndObject)
+                {
+                    completedRootObject = true;
+                    break;
+                }
                 if (reader.TokenType != JsonTokenType.PropertyName)
                     return false;
 
@@ -127,9 +133,9 @@ public sealed record AuthenticatedOwner(string Issuer, string Subject)
                 }
             }
 
-            return issuerCount == 1 && subjectCount == 1;
+            return completedRootObject && !reader.Read() && issuerCount == 1 && subjectCount == 1;
         }
-        catch (Exception exception) when (exception is FormatException or JsonException)
+        catch (Exception exception) when (exception is FormatException or JsonException or InvalidOperationException)
         {
             return false;
         }

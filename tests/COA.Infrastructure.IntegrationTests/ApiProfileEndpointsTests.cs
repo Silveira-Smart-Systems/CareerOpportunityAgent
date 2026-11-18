@@ -131,12 +131,19 @@ public sealed class ApiProfileEndpointsTests(SqlServerFixture fixture) : IClassF
         $$"""{"headline":"{{headline}}","evidence":[{"claim":"synthetic","sourceReference":"fixture","origin":"userProvided"}],"preferences":{"preferredArrangement":"remote","remoteOnly":true,"minimumHourlyRate":80.01,"currency":"EUR","maximumOfficeDaysPerWeek":0}{{(expectedVersion.HasValue ? $",\"expectedVersion\":{expectedVersion}" : string.Empty)}}}""";
 }
 
-public sealed class ApiProfileFactory(string connectionString) : WebApplicationFactory<global::Program>
+public sealed class ApiProfileFactory : WebApplicationFactory<global::Program>
 {
+    private readonly string _connectionString;
     public const string Issuer = "https://issuer.test/";
     public const string Audience = "https://api.coa.test";
     public static readonly RsaSecurityKey SigningKey = new(RSA.Create(2048));
     public static readonly RsaSecurityKey OtherSigningKey = new(RSA.Create(2048));
+
+    public ApiProfileFactory(string connectionString)
+    {
+        _connectionString = connectionString;
+        Environment.SetEnvironmentVariable("ConnectionStrings__COA", connectionString);
+    }
 
     public string CreateToken(string? subject, SecurityKey? signingKey = null, IEnumerable<Claim>? extraClaims = null)
     {
@@ -176,7 +183,7 @@ public sealed class ApiProfileFactory(string connectionString) : WebApplicationF
         {
             ["Authentication:JwtBearer:Authority"] = Issuer,
             ["Authentication:JwtBearer:Audience"] = Audience,
-            ["ConnectionStrings:COA"] = connectionString
+            ["ConnectionStrings:COA"] = _connectionString
         }));
         builder.ConfigureTestServices(services => services.PostConfigure<JwtBearerOptions>(
             JwtBearerDefaults.AuthenticationScheme,
@@ -201,7 +208,7 @@ public sealed class ApiProfileFactory(string connectionString) : WebApplicationF
             services.RemoveAll<IDbContextFactory<COA.Infrastructure.ProfilePersistence.CoaDbContext>>();
             services.RemoveAll<DbContextOptions<COA.Infrastructure.ProfilePersistence.CoaDbContext>>();
             services.AddDbContextFactory<COA.Infrastructure.ProfilePersistence.CoaDbContext>(options =>
-                options.UseSqlServer(connectionString));
+                options.UseSqlServer(_connectionString));
         });
     }
 }
