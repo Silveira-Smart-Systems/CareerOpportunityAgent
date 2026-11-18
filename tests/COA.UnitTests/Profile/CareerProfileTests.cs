@@ -62,6 +62,20 @@ public sealed class CareerProfileTests
     }
 
     [Fact]
+    public void Rate_with_zero_or_two_decimal_places_is_accepted()
+    {
+        var wholeRate = CareerProfile.Create(
+            Guid.NewGuid(), "Engineer", Array.Empty<ProfileEvidence>(),
+            new CareerPreferences(WorkArrangement.Remote, true, 80.00m, "EUR", 0));
+        var twoDecimalRate = CareerProfile.Create(
+            Guid.NewGuid(), "Engineer", Array.Empty<ProfileEvidence>(),
+            new CareerPreferences(WorkArrangement.Remote, true, 80.01m, "EUR", 0));
+
+        Assert.Equal(80.00m, wholeRate.Preferences.MinimumHourlyRate);
+        Assert.Equal(80.01m, twoDecimalRate.Preferences.MinimumHourlyRate);
+    }
+
+    [Fact]
     public void Evidence_must_have_provenance()
     {
         Assert.Throws<ArgumentException>(() => CareerProfile.Create(

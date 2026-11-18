@@ -66,6 +66,9 @@ public sealed class ProfileUseCases(IProfileStore store)
         ReviseProfileRequest request,
         CancellationToken cancellationToken = default)
     {
+        // Request existence and expected-version shape are validated first. Profile state then takes
+        // precedence over proposed content: NotFound/Conflict is returned before constructing a
+        // revision. This evaluates Domain revision rules exactly once when the expected snapshot exists.
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(request);
         if (request.ExpectedVersion < 1)

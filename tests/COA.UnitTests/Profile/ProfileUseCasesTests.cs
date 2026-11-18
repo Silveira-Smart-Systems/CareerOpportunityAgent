@@ -40,17 +40,21 @@ public sealed class ProfileUseCasesTests
     }
 
     [Fact]
-    public async Task Get_version_returns_found_profile_for_trusted_owner()
+    public async Task Get_version_returns_requested_historical_snapshot_for_trusted_owner()
     {
-        var profile = Profile();
-        var store = new FakeProfileStore { VersionResult = profile };
+        var original = Profile();
+        var current = original.Revise("Architect", new[] { Evidence("Azure") }, Preferences());
+        var store = new FakeProfileStore { CurrentResult = current, VersionResult = original };
         var owner = Owner();
 
         var result = await new ProfileUseCases(store).GetVersionAsync(owner, 1);
 
         var found = Assert.IsType<ProfileReadResult.Found>(result);
         Assert.Same(owner, store.LastOwner);
-        Assert.Same(profile, found.Profile);
+        Assert.Equal(1, store.LastVersion);
+        Assert.Same(original, found.Profile);
+        Assert.Equal(1, found.Profile.Version);
+        Assert.Equal("Engineer", found.Profile.Headline);
     }
 
     [Fact]
@@ -91,6 +95,48 @@ public sealed class ProfileUseCasesTests
     }
 
     [Fact]
+    public async Task Revision_returns_new_snapshot_and_forwards_owner_and_expected_version()
+    {
+        var original = Profile();
+        var store = new FakeProfileStore { CurrentResult = original };
+        var owner = Owner();
+
+        var result = await new ProfileUseCases(store).ReviseAsync(owner, ReviseRequest(expectedVersion: 1));
+
+        var revised = Assert.IsType<ReviseProfileResult.Revised>(result).Profile;
+        Assert.Same(owner, store.LastOwner);
+        Assert.Equal(1, store.LastExpectedVersion);
+        Assert.Same(revised, store.LastRevisedProfile);
+        Assert.Equal(2, revised.Version);
+        Assert.Equal("Architect", revised.Headline);
+        Assert.Equal(1, original.Version);
+        Assert.Equal("Engineer", original.Headline);
+        Assert.Equal("C#", original.Evidence[0].Claim);
+    }
+
+    [Fact]
+    public async Task Revision_prioritizes_missing_profile_over_invalid_proposed_content()
+    {
+        var store = new FakeProfileStore();
+
+        var result = await new ProfileUseCases(store).ReviseAsync(Owner(), InvalidReviseRequest());
+
+        Assert.IsType<ReviseProfileResult.NotFound>(result);
+        Assert.Equal(0, store.ReviseCalls);
+    }
+
+    [Fact]
+    public async Task Revision_prioritizes_stale_version_over_invalid_proposed_content()
+    {
+        var store = new FakeProfileStore { CurrentResult = Profile() };
+
+        var result = await new ProfileUseCases(store).ReviseAsync(Owner(), InvalidReviseRequest(expectedVersion: 2));
+
+        Assert.IsType<ReviseProfileResult.Conflict>(result);
+        Assert.Equal(0, store.ReviseCalls);
+    }
+
+    [Fact]
     public void Owner_identity_rejects_missing_or_oversized_claim_values_without_normalizing()
     {
         Assert.Throws<ArgumentException>(() => new OwnerIdentity("", "subject"));
@@ -100,6 +146,8 @@ public sealed class ProfileUseCasesTests
         Assert.Equal("https://Issuer.example", owner.Issuer);
         Assert.Equal("Subject-A", owner.Subject);
         Assert.NotEqual(owner, Owner("https://issuer.example", "Subject-A"));
+        Assert.NotEqual(owner, Owner("https://Issuer.example", "subject-a"));
+        Assert.Equal(owner, Owner("https://Issuer.example", "Subject-A"));
         Assert.DoesNotContain(owner.Subject, owner.ToString());
     }
 
@@ -123,11 +171,14 @@ public sealed class ProfileUseCasesTests
     private static ReviseProfileRequest ReviseRequest(int expectedVersion) =>
         new(expectedVersion, "Architect", new[] { Evidence() }, Preferences());
 
+    private static ReviseProfileRequest InvalidReviseRequest(int expectedVersion = 1) =>
+        new(expectedVersion, "", Array.Empty<ProfileEvidence>(), Preferences());
+
     private static CareerProfile Profile() =>
         CareerProfile.Create(Guid.NewGuid(), "Engineer", new[] { Evidence() }, Preferences());
 
-    private static ProfileEvidence Evidence() =>
-        new("C#", "synthetic-source", EvidenceOrigin.UserProvided);
+    private static ProfileEvidence Evidence(string claim = "C#") =>
+        new(claim, "synthetic-source", EvidenceOrigin.UserProvided);
 
     private static CareerPreferences Preferences() =>
         new(WorkArrangement.Remote, true, 65m, "EUR", 0);
@@ -143,6 +194,12 @@ public sealed class ProfileUseCasesTests
         public ReviseProfileResult? ReviseResult { get; set; }
 
         public OwnerIdentity? LastOwner { get; private set; }
+
+        public int? LastVersion { get; private set; }
+
+        public int? LastExpectedVersion { get; private set; }
+
+        public CareerProfile? LastRevisedProfile { get; private set; }
 
         public int ReviseCalls { get; private set; }
 
@@ -161,6 +218,7 @@ public sealed class ProfileUseCasesTests
         public Task<CareerProfile?> GetVersionAsync(OwnerIdentity owner, int version, CancellationToken cancellationToken = default)
         {
             LastOwner = owner;
+            LastVersion = version;
             return Task.FromResult(VersionResult);
         }
 
@@ -171,6 +229,8 @@ public sealed class ProfileUseCasesTests
             CancellationToken cancellationToken = default)
         {
             LastOwner = owner;
+            LastExpectedVersion = expectedVersion;
+            LastRevisedProfile = revisedProfile;
             ReviseCalls++;
             return Task.FromResult(ReviseResult ?? new ReviseProfileResult.Revised(revisedProfile));
         }
