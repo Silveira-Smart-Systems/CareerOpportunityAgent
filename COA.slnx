@@ -2,10 +2,12 @@
   <Folder Name="/src/">
     <Project Path="src/COA.Domain/COA.Domain.csproj" />
     <Project Path="src/COA.Application/COA.Application.csproj" />
+    <Project Path="src/COA.Infrastructure/COA.Infrastructure.csproj" />
     <Project Path="src/COA.Api/COA.Api.csproj" />
     <Project Path="src/COA.Web/COA.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/COA.Infrastructure.IntegrationTests/COA.Infrastructure.IntegrationTests.csproj" />
     <Project Path="tests/COA.UnitTests/COA.UnitTests.csproj" />
   </Folder>
 </Solution>

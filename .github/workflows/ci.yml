@@ -66,4 +66,34 @@ jobs:
         run: dotnet build "${{ steps.solution.outputs.path }}" --configuration Release --no-restore
       - name: Test
         if: steps.solution.outputs.found == 'true'
-        run: dotnet test "${{ steps.solution.outputs.path }}" --configuration Release --no-build
+        run: dotnet test tests/COA.UnitTests/COA.UnitTests.csproj --configuration Release --no-build
+
+  sql-integration:
+    runs-on: ubuntu-latest
+    env:
+      COA_SQL_TEST_PASSWORD: ${{ format('CoaCi-{0}-Sql!', github.run_id) }}
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: ${{ format('CoaCi-{0}-Sql!', github.run_id) }}
+        ports:
+          - 1433:1433
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Configure ephemeral SQL connection
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$COA_SQL_TEST_PASSWORD"
+          echo "COA_SQL_TEST_CONNECTION_STRING=Server=localhost,1433;Database=master;User Id=sa;Password=$COA_SQL_TEST_PASSWORD;Encrypt=True;TrustServerCertificate=True;Connection Timeout=3" >> "$GITHUB_ENV"
+      - name: Restore
+        run: dotnet restore COA.slnx
+      - name: Build
+        run: dotnet build COA.slnx --configuration Release --no-restore
+      - name: SQL Server integration tests
+        run: dotnet test tests/COA.Infrastructure.IntegrationTests/COA.Infrastructure.IntegrationTests.csproj --configuration Release --no-build
