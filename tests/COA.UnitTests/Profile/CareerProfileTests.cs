@@ -54,6 +54,14 @@ public sealed class CareerProfileTests
     }
 
     [Fact]
+    public void Rate_with_more_than_two_decimal_places_is_rejected_without_rounding()
+    {
+        Assert.Throws<ArgumentException>(() => CareerProfile.Create(
+            Guid.NewGuid(), "Engineer", Array.Empty<ProfileEvidence>(),
+            new CareerPreferences(WorkArrangement.Remote, true, 80.001m, "EUR", 0)));
+    }
+
+    [Fact]
     public void Evidence_must_have_provenance()
     {
         Assert.Throws<ArgumentException>(() => CareerProfile.Create(
