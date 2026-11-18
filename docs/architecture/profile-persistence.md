@@ -1,6 +1,6 @@
 # Profile persistence and authorization design
 
-Status: Proposed for human approval in #32. Tracking: #20, #32, #33, #34, #35. This is a design, not an implemented security control.
+Status: Accepted by ADR-0012; implementation tracked by #33, #34, and #35. This document describes the approved design and is not, by itself, an implemented security control.
 
 This document specifies the operational schema and delivery checks. ADR-0012 records the decision and trade-offs; ADR-0010 and ADR-0011 define the identity-provider and Blazor/API boundaries.
 
