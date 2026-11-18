@@ -1,6 +1,6 @@
 # ADR-0012: EF Core SQL Server profile persistence and owner isolation
 
-- **Status:** Proposed — human approval required
+- **Status:** Accepted
 - **Date:** 2026-11-18
 - **Issue:** #32 (parent #20)
 - **Related:** ADR-0009, ADR-0010, ADR-0011, #33, #34, #35
