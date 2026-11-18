@@ -71,13 +71,14 @@ jobs:
   sql-integration:
     runs-on: ubuntu-latest
     env:
-      COA_SQL_TEST_PASSWORD: ${{ format('CoaCi-{0}-Sql!', github.run_id) }}
+      # Dedicated test-only secret. GitHub injects and masks it; no credential is committed or printed.
+      COA_SQL_TEST_PASSWORD: ${{ secrets.COA_SQL_TEST_SA_PASSWORD }}
     services:
       sqlserver:
         image: mcr.microsoft.com/mssql/server:2022-latest
         env:
           ACCEPT_EULA: Y
-          MSSQL_SA_PASSWORD: ${{ format('CoaCi-{0}-Sql!', github.run_id) }}
+          MSSQL_SA_PASSWORD: ${{ secrets.COA_SQL_TEST_SA_PASSWORD }}
         ports:
           - 1433:1433
     steps:

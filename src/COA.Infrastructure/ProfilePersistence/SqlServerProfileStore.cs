@@ -178,11 +178,13 @@ public sealed class SqlServerProfileStore(IDbContextFactory<CoaDbContext> contex
 
             if (updated == 0)
             {
-                var ownProfileExists = await context.Profiles
+                var submittedProfileExists = await context.Profiles
                     .AsNoTracking()
-                    .AnyAsync(profile => profile.OwnerId == ownerEntity.OwnerId, cancellationToken);
+                    .AnyAsync(profile => profile.OwnerId == ownerEntity.OwnerId &&
+                        profile.ProfileId == revisedProfile.Id,
+                        cancellationToken);
                 await transaction.RollbackAsync(cancellationToken);
-                return ownProfileExists
+                return submittedProfileExists
                     ? new ReviseProfileResult.Conflict()
                     : new ReviseProfileResult.NotFound();
             }
@@ -323,24 +325,36 @@ public sealed class SqlServerProfileStore(IDbContextFactory<CoaDbContext> contex
         out string constraintName)
     {
         var sqlException = FindSqlException(exception);
-        if (sqlException is null || sqlException.Errors.Cast<SqlError>().All(error => error.Number is not 2601 and not 2627))
+        if (sqlException is null)
         {
             constraintName = string.Empty;
             return false;
         }
 
-        foreach (var candidate in new[] { ProfileSchema.OwnerKeyIndex, ProfileSchema.ProfileOwnerIndex })
+        var uniqueErrors = sqlException.Errors.Cast<SqlError>()
+            .Where(error => error.Number is 2601 or 2627)
+            .ToArray();
+        if (uniqueErrors.Length != 1)
         {
-            if (sqlException.Errors.Cast<SqlError>().Any(error =>
-                error.Message.Contains(candidate, StringComparison.Ordinal)))
-            {
-                constraintName = candidate;
-                return true;
-            }
+            constraintName = string.Empty;
+            return false;
         }
 
-        constraintName = string.Empty;
-        return false;
+        // SqlException has no structured constraint-name property. Restrict message parsing to one
+        // SQL Server duplicate-key error and one migration-owned name; localization or an unknown
+        // driver format therefore fails closed and propagates the original database exception.
+        var expectedConstraints = new[] { ProfileSchema.OwnerKeyIndex, ProfileSchema.ProfileOwnerIndex };
+        var matchingConstraints = expectedConstraints
+            .Where(candidate => uniqueErrors[0].Message.Contains(candidate, StringComparison.Ordinal))
+            .ToArray();
+        if (matchingConstraints.Length != 1)
+        {
+            constraintName = string.Empty;
+            return false;
+        }
+
+        constraintName = matchingConstraints[0];
+        return true;
     }
 
     private static SqlException? FindSqlException(Exception exception)

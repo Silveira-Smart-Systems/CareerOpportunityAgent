@@ -174,6 +174,28 @@ public sealed class ProfileStoreTests(SqlServerFixture fixture) : IClassFixture<
     }
 
     [Fact]
+    public async Task Revision_with_wrong_profile_id_is_not_found_without_mutation()
+    {
+        var owner = Owner("wrong-profile-id");
+        var original = Profile("original", Evidence("original"));
+        var store = fixture.CreateStore();
+        await store.CreateAsync(owner, original);
+        var wrongProfile = original.Revise("wrong", new[] { Evidence("wrong") }, Preferences()) with
+        {
+            Id = Guid.NewGuid()
+        };
+
+        var result = await store.ReviseAsync(owner, 1, wrongProfile);
+        var current = await store.GetCurrentAsync(owner);
+        var versionTwo = await store.GetVersionAsync(owner, 2);
+
+        Assert.IsType<ReviseProfileResult.NotFound>(result);
+        Assert.Equal(1, current?.Version);
+        Assert.Equal("original", current?.Headline);
+        Assert.Null(versionTwo);
+    }
+
+    [Fact]
     public async Task Failure_after_cas_rolls_back_head_and_snapshot()
     {
         var owner = Owner("rollback");
