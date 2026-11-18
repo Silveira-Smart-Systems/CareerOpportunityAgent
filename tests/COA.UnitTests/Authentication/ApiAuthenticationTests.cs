@@ -182,7 +182,8 @@ public sealed class ApiAuthenticationFactory : WebApplicationFactory<global::Pro
         builder.ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Authentication:JwtBearer:Authority"] = Issuer,
-            ["Authentication:JwtBearer:Audience"] = Audience
+            ["Authentication:JwtBearer:Audience"] = Audience,
+            ["ConnectionStrings:COA"] = "Server=(localdb)\\MSSQLLocalDB;Database=COA_Authentication_Test;Trusted_Connection=True"
         }));
         builder.ConfigureTestServices(services => services.PostConfigure<JwtBearerOptions>(
             JwtBearerDefaults.AuthenticationScheme,

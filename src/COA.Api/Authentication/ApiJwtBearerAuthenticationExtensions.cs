@@ -42,6 +42,23 @@ public static class ApiJwtBearerAuthenticationExtensions
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromMinutes(1)
                 };
+                options.Events = new JwtBearerEvents
+                {
+                    OnTokenValidated = context =>
+                    {
+                        AuthenticatedOwner.MarkInvalidIdentityShape(context.Principal, context.SecurityToken);
+                        return Task.CompletedTask;
+                    },
+                    OnChallenge = async context =>
+                    {
+                        context.HandleResponse();
+                        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                        await Results.Problem(
+                            statusCode: StatusCodes.Status401Unauthorized,
+                            title: "Authentication required",
+                            type: "https://httpstatuses.com/401").ExecuteAsync(context.HttpContext);
+                    }
+                };
             });
 
         return services;

@@ -58,6 +58,25 @@ All profile reads and writes include the authenticated owner in the query predic
 
 An authenticated principal without a usable validated issuer/subject is denied; it never falls back to email or a caller value. Returning `404` for another owner's resources prevents owner/profile enumeration. Responses and `ProblemDetails` must not disclose owner identity or raw SQL details.
 
+### API profile contract (#35)
+
+`COA.Api` exposes `GET /api/profile`, `POST /api/profile`, `PUT /api/profile`, and
+`GET /api/profile/versions/{version}` behind JWT bearer authentication. Create returns `201`
+and `Location: /api/profile`; revision is a full replacement and includes `expectedVersion` in
+its JSON body. `ProfileResponse` contains `id`, `version`, `headline`, ordered `evidence`, and
+`preferences`. Request bodies cannot contain owner identity or a profile ID.
+
+The API accepts only required contract properties, rejects unknown or duplicate JSON properties,
+numeric enum values, invalid enum strings, malformed JSON, and decimal values that do not meet
+Domain precision rules. Invalid bodies return privacy-safe `400 ProblemDetails`. Missing or
+invalid bearer credentials return `401`; a validated token with unusable `iss`/`sub` returns
+`403`; missing and other-owner resources both return the same `404` response; duplicate creation
+and stale `expectedVersion` return `409`.
+
+`expectedVersion` remains the MVP concurrency contract. `ETag`/`If-Match` is intentionally not
+also implemented: it would add conditional-header and `412` semantics without replacing the
+approved `CurrentVersion` compare-and-swap contract.
+
 ## Migrations and SQL Server integration tests
 
 - Migrations live in `COA.Infrastructure` and are generated/applied with EF Core tooling through an explicit deployment or CI step. The API must not run production migrations automatically at startup.

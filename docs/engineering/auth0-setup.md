@@ -21,7 +21,7 @@ Tracking: #20, #23; ADR-0010, ADR-0011. Do not store real tenant details or toke
 - Validate signature, issuer, audience, lifetime; require HTTPS metadata outside explicit local development.
 - Use `MapGroup("/api/profile").RequireAuthorization()` when authenticated endpoints are implemented.
 - Derive `OwnerSubject` from validated `iss` and `sub` claims; never trust request-body ownership.
-- Keep `/health` anonymous. The synthetic `/api/matching/evaluate` endpoint remains anonymous in this increment because it has no persistence or private inputs and is not an authorization authority; secure or remove it before exposing it beyond controlled development use.
+- Keep `/health` anonymous. The synthetic `/api/matching/evaluate` endpoint is mapped only in the Development environment, with synthetic inputs only; it is absent from non-Development environments.
 - Do not enable a global bypass or mock authentication outside tests.
 
 ## Configuration placeholders
