@@ -1,22 +1,19 @@
 # Auth0 setup for COA — proposed implementation checklist
 
-Tracking: #20; ADR-0010. Do not store real tenant details or tokens in this repository.
+Tracking: #20, #23; ADR-0010, ADR-0011. Do not store real tenant details or tokens in this repository.
 
 ## Auth0 dashboard (human setup)
 1. Create a dedicated development Auth0 tenant.
-2. Register an application of type **Single Page Application** for React.
+2. Register COA Web as a **Regular Web Application** for the confidential server-side OIDC flow in ADR-0011.
 3. Register an API resource with a stable unique identifier (example `https://api.coa.example`; placeholder, not a live URL).
 4. Configure development callback URLs, logout URLs, and allowed web origins with **exact** frontend origins. Never use wildcard production origins.
 5. Keep public self-signup disabled for User Zero until explicitly approved.
 6. Verify API access token issuance with the intended audience and RS256 signature.
 
-## React SPA
-- Use the supported Auth0 React/OIDC SDK with Authorization Code + PKCE.
-- Request `openid profile email` and the registered API audience; only add scopes actually needed.
-- Keep tokens in memory; do not persist tokens to localStorage.
-- Handle login/logout, token renewal, expired sessions, and API 401/403.
-- Use HTTPS in deployed environments and a restrictive Content Security Policy.
-- Consider BFF with server-side session before beta.
+## COA Web
+- COA Web uses server-side OIDC with Authorization Code + PKCE and an HttpOnly cookie session; see ADR-0011 and `blazor-auth0-local-setup.md`.
+- Do not send browser tokens to COA.Api for Blazor Server screens that call Application use cases directly.
+- Never use an ID token as a COA.Api bearer token.
 
 ## ASP.NET Core API
 - Add `Microsoft.AspNetCore.Authentication.JwtBearer` (version aligned to .NET 10).
@@ -24,15 +21,17 @@ Tracking: #20; ADR-0010. Do not store real tenant details or tokens in this repo
 - Validate signature, issuer, audience, lifetime; require HTTPS metadata outside explicit local development.
 - Use `MapGroup("/api/profile").RequireAuthorization()` when authenticated endpoints are implemented.
 - Derive `OwnerSubject` from validated `iss` and `sub` claims; never trust request-body ownership.
-- Keep `/health` anonymous; assess whether synthetic `/api/matching/evaluate` should be secured or removed before deployment.
+- Keep `/health` anonymous. The synthetic `/api/matching/evaluate` endpoint remains anonymous in this increment because it has no persistence or private inputs and is not an authorization authority; secure or remove it before exposing it beyond controlled development use.
 - Do not enable a global bypass or mock authentication outside tests.
 
 ## Configuration placeholders
 ```json
 {
   "Authentication": {
-    "Authority": "https://YOUR_TENANT_REGION.auth0.com/",
-    "Audience": "https://api.coa.example"
+    "JwtBearer": {
+      "Authority": "https://YOUR_TENANT_REGION.auth0.com/",
+      "Audience": "https://api.coa.example"
+    }
   }
 }
 ```
@@ -52,7 +51,7 @@ No client secret belongs in the SPA. Tenant domain, client ID and API audience a
 2. Implement API authentication middleware and minimal protected `/api/me` endpoint using synthetic data.
 3. Implement owner-scoped Application port and SQL Server immutable version persistence.
 4. Add authenticated profile CRUD and authorization/integration tests.
-5. Integrate React login and assess BFF/security before beta.
+5. Reassess whether API clients are needed before exposing additional bearer-protected endpoints.
 
 ## References
 - https://learn.microsoft.com/en-us/aspnet/core/security/authentication/configure-jwt-bearer-authentication?view=aspnetcore-10.0
