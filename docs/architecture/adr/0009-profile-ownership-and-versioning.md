@@ -1,6 +1,6 @@
 # ADR-0009: Authenticated ownership and immutable profile versions
 
-- **Status:** Proposed — pending supersession if ADR-0012 is accepted
+- **Status:** Superseded by ADR-0012
 - **Date:** 2026-11-17
 - **Issue:** #20
 - **Related:** #14, #1
