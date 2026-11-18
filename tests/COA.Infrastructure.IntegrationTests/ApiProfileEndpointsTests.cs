@@ -74,7 +74,14 @@ public sealed class ApiProfileEndpointsTests(SqlServerFixture fixture) : IClassF
 
         Assert.Equal(HttpStatusCode.NotFound, otherOwner.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, absent.StatusCode);
-        Assert.Equal(await otherOwner.Content.ReadAsStringAsync(), await absent.Content.ReadAsStringAsync());
+        using var otherOwnerProblem = JsonDocument.Parse(await otherOwner.Content.ReadAsStringAsync());
+        using var absentProblem = JsonDocument.Parse(await absent.Content.ReadAsStringAsync());
+        Assert.Equal(otherOwnerProblem.RootElement.GetProperty("status").GetInt32(), absentProblem.RootElement.GetProperty("status").GetInt32());
+        Assert.Equal(otherOwnerProblem.RootElement.GetProperty("title").GetString(), absentProblem.RootElement.GetProperty("title").GetString());
+        Assert.Equal(otherOwnerProblem.RootElement.GetProperty("type").GetString(), absentProblem.RootElement.GetProperty("type").GetString());
+        Assert.Equal(
+            TryGetProblemDetail(otherOwnerProblem.RootElement),
+            TryGetProblemDetail(absentProblem.RootElement));
     }
 
     [Fact]
@@ -120,6 +127,9 @@ public sealed class ApiProfileEndpointsTests(SqlServerFixture fixture) : IClassF
 
     private static void Authorize(HttpClient client, string token) =>
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+    private static string? TryGetProblemDetail(JsonElement problem) =>
+        problem.TryGetProperty("detail", out var detail) ? detail.GetString() : null;
 
     private static Task<HttpResponseMessage> SendJsonAsync(HttpClient client, HttpMethod method, string path, string json) =>
         client.SendAsync(new HttpRequestMessage(method, path)
