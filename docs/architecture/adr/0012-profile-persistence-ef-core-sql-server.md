@@ -49,6 +49,6 @@ Use real isolated SQL Server databases for persistence/integration tests in CI. 
 4. Approve hard deletion on a verified request and the proposed backup-expiry target of up to 30 days, subject to infrastructure capability and legal obligations, before real personal data is stored.
 5. Approve a CI SQL Server service and explicit migration step; no production auto-migration.
 
-## Supersession on acceptance
+## Supersedes
 
-When this ADR is Accepted, it supersedes the open provider/persistence implementation choices in ADR-0009. Until then, ADR-0009 remains Proposed and pending supersession.
+This accepted ADR supersedes the open provider/persistence implementation choices in ADR-0009. ADR-0009 remains as historical context.
