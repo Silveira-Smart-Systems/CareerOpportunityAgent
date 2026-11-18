@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text.Json;
 using COA.Api.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
@@ -62,11 +63,13 @@ public sealed class ApiAuthenticationTests : IClassFixture<ApiAuthenticationFact
 
         var response = await client.GetAsync("/api/me");
         var body = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(body);
+        var properties = document.RootElement.EnumerateObject().ToArray();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains(ApiAuthenticationFactory.Issuer, body, StringComparison.Ordinal);
-        Assert.Contains("user-123", body, StringComparison.Ordinal);
-        Assert.DoesNotContain("access_token", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(2, properties.Length);
+        Assert.Equal(ApiAuthenticationFactory.Issuer, document.RootElement.GetProperty("issuer").GetString());
+        Assert.Equal("user-123", document.RootElement.GetProperty("subject").GetString());
     }
 
     [Fact]
