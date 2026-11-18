@@ -1,6 +1,6 @@
 # ADR-0009: Authenticated ownership and immutable profile versions
 
-- **Status:** Proposed — awaiting human review
+- **Status:** Proposed — pending supersession if ADR-0012 is accepted
 - **Date:** 2026-11-17
 - **Issue:** #20
 - **Related:** #14, #1
@@ -9,9 +9,7 @@
 The COA profile contains personal career data. The initial User Zero scope does not eliminate authentication and access-control risks. Profile changes must preserve historical evidence and support concurrency safety.
 
 ## Decision
-Require a validated authenticated identity for profile access; derive ownership from the server-side identity subject. Persist profile revisions as immutable snapshots with an optimistic expected-version check. Application owns use cases and ports; Infrastructure owns SQL Server persistence; Domain remains provider-agnostic.
-
-An OIDC provider versus local identity implementation choice remains **open** and requires an explicit follow-up decision before exposing personal-data endpoints.
+ADR-0012 proposes a successor decision: validated issuer plus subject ownership, EF Core 10 with SQL Server, append-only snapshots, atomic expected-version concurrency, and owner-scoped access. It does not formally supersede this ADR until human approval changes ADR-0012 to Accepted. Application owns use cases and ports; Infrastructure owns SQL Server persistence; Domain remains provider-agnostic.
 
 ## Alternatives
 - Unauthenticated single-user CRUD: rejected due to privacy risk.
