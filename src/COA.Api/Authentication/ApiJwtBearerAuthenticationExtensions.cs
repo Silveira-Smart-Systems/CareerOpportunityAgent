@@ -15,8 +15,14 @@ public static class ApiJwtBearerAuthenticationExtensions
 
         if (string.IsNullOrWhiteSpace(authority) || string.IsNullOrWhiteSpace(audience))
         {
-            throw new InvalidOperationException(
-                "Authentication:JwtBearer:Authority and Authentication:JwtBearer:Audience must be configured.");
+            if (!environment.IsEnvironment("Testing"))
+            {
+                throw new InvalidOperationException(
+                    "Authentication:JwtBearer:Authority and Authentication:JwtBearer:Audience must be configured.");
+            }
+
+            authority = "https://test.invalid/";
+            audience = "test-audience";
         }
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
