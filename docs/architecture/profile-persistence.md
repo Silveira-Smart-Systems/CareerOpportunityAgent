@@ -24,7 +24,7 @@ An Auth0 tenant, connection, or subject migration must not silently associate a 
 | `ProfileVersions` | PK `(ProfileId, Version)`; FK to `Profiles`; `Headline nvarchar(200)`; preference snapshot fields; `CreatedAtUtc datetime2(7)` | Append-only profile snapshots. |
 | `ProfileEvidence` | PK `(ProfileId, Version, Ordinal)`; FK to `ProfileVersions`; `Claim nvarchar(500)`; `SourceReference nvarchar(300)`; `Origin tinyint` | Ordered, provenance-linked evidence for one snapshot. |
 
-`ProfileVersions` stores `PreferredArrangement tinyint`, `RemoteOnly bit`, `MinimumHourlyRate decimal(18,2) null`, `Currency char(3) null`, and `MaximumOfficeDaysPerWeek tinyint null`. Fluent API must configure all limits, FKs, required fields, `CurrentVersion > 0`, the unique owner/profile index, binary collations, and evidence ordinal ordering. The profile limits match current Domain validation; SQL constraints are a second boundary, not a replacement for Domain validation.
+`ProfileVersions` stores `PreferredArrangement tinyint`, `RemoteOnly bit`, `MinimumHourlyRate decimal(18,2) null`, `Currency char(3) null`, and `MaximumOfficeDaysPerWeek tinyint null`. `MinimumHourlyRate` must be exactly representable in increments of 0.01: #33 adds explicit Application/Domain validation that rejects extra significant fractional digits rather than silently rounding. Fluent API must configure all limits, FKs, required fields, `CurrentVersion > 0`, the unique owner/profile index, binary collations, and evidence ordinal ordering. The profile limits match current Domain validation; SQL constraints are a second boundary, not a replacement for Domain validation.
 
 The `OwnerKey` avoids SQL Server's composite index key-size limit while retaining case-sensitive identity semantics. Infrastructure computes it only after receiving the validated issuer and subject. Oversized claims above the documented 2,048-character storage limit are rejected as authentication/identity input failures, never truncated.
 
@@ -35,13 +35,15 @@ Creation is distinct from revision:
 - `POST /api/profile` creates the single profile for the authenticated owner and returns `201`; a profile that already exists returns `409`. It is not an upsert.
 - `PUT /api/profile` revises an existing profile and requires `expectedVersion`; an absent profile returns `404`.
 
+Creation relies on the unique `Profiles.OwnerId` constraint. Concurrent creates for the same authenticated owner are one `201` and one `409`; the duplicate-key outcome is translated without inspecting another owner's data.
+
 Revision uses one SQL transaction and an atomic compare-and-swap:
 
 1. Update the owner-scoped `Profiles` row only when `CurrentVersion = expectedVersion`.
 2. If one row changes, insert version `expectedVersion + 1` and its evidence rows, then commit.
-3. If no row changes, query only within the same owner scope: no profile is `404`; an existing profile with another version is `409`.
+3. If no row changes, query only within the same owner scope: no profile is `404`; an existing profile with another version is `409`. A profile belonging to a different owner is never queried outside that scope and also remains `404`.
 
-`CurrentVersion` is the client concurrency contract. `rowversion` is an EF Core concurrency safeguard for tracked root-row writes; it does not replace the atomic SQL compare-and-swap. A failed transaction inserts no partial snapshot. Infrastructure never updates or deletes version/evidence rows during ordinary profile edits. Account deletion is the explicit policy exception.
+`CurrentVersion` is the client concurrency contract. `rowversion` is an EF Core concurrency safeguard for tracked root-row writes; it does not replace the atomic SQL compare-and-swap. A failed transaction inserts no partial snapshot. Infrastructure never updates or deletes version/evidence rows during ordinary profile edits. Account deletion is the explicit policy exception. #34 must prove these creation and revision outcomes with concurrent transactions against real SQL Server and its selected transaction isolation; the classifications are not accepted merely from unit tests.
 
 ## Owner-scoped authorization and HTTP semantics
 
@@ -61,13 +63,13 @@ An authenticated principal without a usable validated issuer/subject is denied; 
 - Migrations live in `COA.Infrastructure` and are generated/applied with EF Core tooling through an explicit deployment or CI step. The API must not run production migrations automatically at startup.
 - SQL integration tests use an isolated real SQL Server database, apply the migrations, and use synthetic identities/data. EF InMemory is not a substitute.
 - CI provisions SQL Server as a service, provides a test-only connection string, and creates a unique database per test run. The fixture migrates before tests and drops that database afterwards.
-- Required tests: schema/migration application; create/read snapshot; evidence ordering; version history immutability; concurrent same-version revisions (one success, one conflict); owner A cannot read/revise owner B; unauthenticated API requests are denied; deletion behaviour when approved.
+- Required tests: schema/migration application; create/read snapshot; evidence ordering; version history immutability; concurrent creation for one owner (one success, one conflict); concurrent same-version revisions (one success, one conflict); absent-own profile is `404`; other-owner profile remains `404`; owner A cannot read/revise owner B; unauthenticated API requests are denied; deletion and restore-reconciliation behaviour when approved.
 
 ## Privacy, retention, and logging
 
 No CV file bytes, bearer tokens, OIDC tokens, emails, or real fixtures are stored in this increment. Structured logs may include a correlation ID, operation, result category, profile ID, version, and duration; they must not include issuer, subject, claims, headline, evidence, source references, request bodies, or database connection strings.
 
-Proposed initial policy: retain active profile snapshots and evidence only while the account is active; an approved deletion request hard-deletes the owner's profile graph in one controlled operation. Backups must expire within an approved, documented timeline and restoration must not silently reactivate deleted data. The precise deletion workflow and backup-retention period remain human approval items.
+Proposed initial policy: retain active profile snapshots and evidence only while the account is active; an approved deletion request hard-deletes the owner's profile graph in one controlled operation. Backups that can contain deleted personal data have an operational expiry target of up to 30 days, subject to the selected infrastructure's capability and applicable legal obligations. The deletion register and restore procedure must ensure verified deletions are re-applied before restored profile data is available, preventing reintroduction after a restore. The provider configuration, retention evidence, legal basis, and operational procedure must be confirmed before any real personal data is persisted; until then the 30-day target is not a guarantee. These remain human approval items.
 
 ## Delivery order
 
