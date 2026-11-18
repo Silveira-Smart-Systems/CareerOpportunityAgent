@@ -152,6 +152,13 @@ public sealed class ApiAuthenticationFactory : WebApplicationFactory<global::Pro
     public static readonly RsaSecurityKey SigningKey = new(RSA.Create(2048));
     public static readonly RsaSecurityKey OtherSigningKey = new(RSA.Create(2048));
 
+    public ApiAuthenticationFactory()
+    {
+        Environment.SetEnvironmentVariable(
+            "ConnectionStrings__COA",
+            "Server=(localdb)\\MSSQLLocalDB;Database=COA_Authentication_Test;Trusted_Connection=True");
+    }
+
     public string CreateToken(
         string? subject,
         string? issuer = null,
@@ -182,7 +189,8 @@ public sealed class ApiAuthenticationFactory : WebApplicationFactory<global::Pro
         builder.ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Authentication:JwtBearer:Authority"] = Issuer,
-            ["Authentication:JwtBearer:Audience"] = Audience
+            ["Authentication:JwtBearer:Audience"] = Audience,
+            ["ConnectionStrings:COA"] = "Server=(localdb)\\MSSQLLocalDB;Database=COA_Authentication_Test;Trusted_Connection=True"
         }));
         builder.ConfigureTestServices(services => services.PostConfigure<JwtBearerOptions>(
             JwtBearerDefaults.AuthenticationScheme,
