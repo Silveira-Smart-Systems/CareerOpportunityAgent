@@ -125,6 +125,72 @@ public sealed class ApiProfileEndpointsTests(SqlServerFixture fixture) : IClassF
         Assert.Equal(HttpStatusCode.NotFound, matching.StatusCode);
     }
 
+    [Fact]
+    public async Task Other_owner_cannot_read_or_replace_current_or_historical_profile()
+    {
+        using var factory = new ApiProfileFactory(fixture.ConnectionString);
+        using var ownerA = factory.CreateClient();
+        Authorize(ownerA, factory.CreateToken("owner-a-write"));
+        Assert.Equal(HttpStatusCode.Created, (await SendJsonAsync(ownerA, HttpMethod.Post, "/api/profile", ProfileJson("Private", null))).StatusCode);
+
+        using var ownerB = factory.CreateClient();
+        Authorize(ownerB, factory.CreateToken("owner-b-write"));
+        var current = await ownerB.GetAsync("/api/profile");
+        var historical = await ownerB.GetAsync("/api/profile/versions/1");
+        var replace = await SendJsonAsync(ownerB, HttpMethod.Put, "/api/profile", ProfileJson("Attempt", 1));
+
+        Assert.Equal(HttpStatusCode.NotFound, current.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, historical.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, replace.StatusCode);
+        Assert.Equal("Private", (await JsonDocument.ParseAsync(await (await ownerA.GetAsync("/api/profile")).Content.ReadAsStreamAsync())).RootElement.GetProperty("headline").GetString());
+    }
+
+    [Theory]
+    [InlineData("{\"evidence\":[],\"preferences\":{\"preferredArrangement\":\"remote\",\"remoteOnly\":true}}")]
+    [InlineData("{\"headline\":\"Engineer\",\"evidence\":[],\"preferences\":{\"preferredArrangement\":99,\"remoteOnly\":true}}")]
+    [InlineData("{\"headline\":\"Engineer\",\"evidence\":[],\"preferences\":{\"preferredArrangement\":\"unknown\",\"remoteOnly\":true}}")]
+    public async Task Invalid_contract_payloads_return_public_bad_request_problem_details(string payload)
+    {
+        using var factory = new ApiProfileFactory(fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        Authorize(client, factory.CreateToken("invalid-contract"));
+
+        var response = await SendJsonAsync(client, HttpMethod.Post, "/api/profile", payload);
+        var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync()).RootElement;
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(400, problem.GetProperty("status").GetInt32());
+        Assert.DoesNotContain("token", response.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Concurrent_create_and_revision_leave_one_current_immutable_history()
+    {
+        using var factory = new ApiProfileFactory(fixture.ConnectionString);
+        using var first = factory.CreateClient();
+        using var second = factory.CreateClient();
+        var token = factory.CreateToken("concurrent");
+        Authorize(first, token);
+        Authorize(second, token);
+
+        var creates = await Task.WhenAll(
+            SendJsonAsync(first, HttpMethod.Post, "/api/profile", ProfileJson("Initial", null)),
+            SendJsonAsync(second, HttpMethod.Post, "/api/profile", ProfileJson("Initial", null)));
+        Assert.Single(creates, response => response.StatusCode == HttpStatusCode.Created);
+        Assert.Single(creates, response => response.StatusCode == HttpStatusCode.Conflict);
+
+        var revisions = await Task.WhenAll(
+            SendJsonAsync(first, HttpMethod.Put, "/api/profile", ProfileJson("Revision A", 1)),
+            SendJsonAsync(second, HttpMethod.Put, "/api/profile", ProfileJson("Revision B", 1)));
+        Assert.Single(revisions, response => response.StatusCode == HttpStatusCode.OK);
+        Assert.Single(revisions, response => response.StatusCode == HttpStatusCode.Conflict);
+
+        var current = JsonDocument.Parse(await (await first.GetAsync("/api/profile")).Content.ReadAsStringAsync()).RootElement;
+        var snapshot = JsonDocument.Parse(await (await first.GetAsync("/api/profile/versions/1")).Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal(2, current.GetProperty("version").GetInt32());
+        Assert.Equal("Initial", snapshot.GetProperty("headline").GetString());
+    }
+
     private static void Authorize(HttpClient client, string token) =>
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
