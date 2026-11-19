@@ -1,4 +1,5 @@
 using COA.Infrastructure.ProfilePersistence;
+using COA.Infrastructure.OpportunityPersistence;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -18,6 +19,8 @@ public sealed class SqlServerFixture : IAsyncLifetime
     public IDbContextFactory<CoaDbContext> ContextFactory { get; private set; } = null!;
 
     public SqlServerProfileStore CreateStore() => new(ContextFactory);
+
+    public SqlServerOpportunityStore CreateOpportunityStore() => new(ContextFactory);
 
     public async Task InitializeAsync()
     {
