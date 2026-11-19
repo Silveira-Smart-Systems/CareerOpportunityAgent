@@ -8,6 +8,13 @@ using COA.Infrastructure.ProfilePersistence;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
+var connectionString = builder.Configuration.GetConnectionString("COA");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException(
+        "ConnectionStrings:COA must be configured through a secure environment or secret store.");
+}
+
 builder.Services.AddProblemDetails();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -17,13 +24,6 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 builder.Services.AddDbContextFactory<CoaDbContext>(options =>
 {
-    var connectionString = builder.Configuration.GetConnectionString("COA");
-    if (string.IsNullOrWhiteSpace(connectionString))
-    {
-        throw new InvalidOperationException(
-            "ConnectionStrings:COA must be configured through a secure environment or secret store.");
-    }
-
     options.UseSqlServer(connectionString, sql =>
         sql.MigrationsAssembly(typeof(CoaDbContext).Assembly.GetName().Name));
 });
