@@ -254,6 +254,7 @@ public sealed class ApiProfileFactory : WebApplicationFactory<global::Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.UseSetting("ConnectionStrings:COA", _connectionString);
         builder.ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Authentication:JwtBearer:Authority"] = Issuer,

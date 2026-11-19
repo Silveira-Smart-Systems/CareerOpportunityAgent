@@ -179,11 +179,12 @@ public sealed class ApiAuthenticationFactory : WebApplicationFactory<global::Pro
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.UseSetting("ConnectionStrings:COA", "Server=unused;Database=COA_Authentication_Test");
         builder.ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Authentication:JwtBearer:Authority"] = Issuer,
             ["Authentication:JwtBearer:Audience"] = Audience,
-            ["ConnectionStrings:COA"] = "Server=(localdb)\\MSSQLLocalDB;Database=COA_Authentication_Test;Trusted_Connection=True"
+            ["ConnectionStrings:COA"] = "Server=unused;Database=COA_Authentication_Test"
         }));
         builder.ConfigureTestServices(services => services.PostConfigure<JwtBearerOptions>(
             JwtBearerDefaults.AuthenticationScheme,
