@@ -8,13 +8,6 @@ using COA.Infrastructure.ProfilePersistence;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
-var connectionString = builder.Configuration.GetConnectionString("COA");
-if (string.IsNullOrWhiteSpace(connectionString))
-{
-    throw new InvalidOperationException(
-        "ConnectionStrings:COA must be configured through a secure environment or secret store.");
-}
-
 builder.Services.AddProblemDetails();
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
@@ -23,8 +16,17 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false));
 });
 builder.Services.AddDbContextFactory<CoaDbContext>(options =>
+{
+    var connectionString = builder.Configuration.GetConnectionString("COA");
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        throw new InvalidOperationException(
+            "ConnectionStrings:COA must be configured through a secure environment or secret store.");
+    }
+
     options.UseSqlServer(connectionString, sql =>
-        sql.MigrationsAssembly(typeof(CoaDbContext).Assembly.GetName().Name)));
+        sql.MigrationsAssembly(typeof(CoaDbContext).Assembly.GetName().Name));
+});
 builder.Services.AddScoped<IProfileStore, SqlServerProfileStore>();
 builder.Services.AddScoped<ProfileUseCases>();
 builder.Services.AddApiJwtBearerAuthentication(builder.Configuration, builder.Environment);
