@@ -20,18 +20,17 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
         // late-operation observers retain it until their slot has been released.
         var limiter = new SemaphoreSlim(options.MaxConcurrentSourceExecutions);
         var lateOperations = new ConcurrentBag<Task>();
-        var finished = false;
+        var completedWithoutLateOperations = false;
         try
         {
             var tasks = targets.Select(item => ExecuteOneAsync(request, item.source, item.market, options, limiter, lateOperations, cancellationToken)).ToArray();
             var outcomes = await Task.WhenAll(tasks);
-            await Task.WhenAll(lateOperations);
-            finished = true;
+            completedWithoutLateOperations = lateOperations.IsEmpty;
             return new DiscoveryOutcome(outcomes.OrderBy(outcome => outcome.SourceId.Value, StringComparer.Ordinal).ThenBy(outcome => outcome.Market.Value, StringComparer.Ordinal).ToArray());
         }
         finally
         {
-            if (finished || lateOperations.IsEmpty) limiter.Dispose();
+            if (completedWithoutLateOperations || lateOperations.IsEmpty) limiter.Dispose();
             else _ = DisposeAfterLateOperationsAsync(lateOperations, limiter);
         }
     }
