@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -6,153 +7,125 @@ using COA.Application.Discovery;
 
 namespace COA.Infrastructure.Discovery.Jobicy;
 
-public sealed class JobicyOpportunitySourceAdapter : IOpportunitySourceAdapter
+public sealed class JobicyOpportunitySourceAdapter(JobicyJobsTransport transport) : IOpportunitySourceAdapter
 {
     public static readonly SourceId JobicySourceId = new("jobicy");
-    private readonly HttpClient _httpClient;
-    private readonly JobicyAdapterOptions _options;
-    private readonly IJobicyRequestRateLimiter _rateLimiter;
-    private readonly TimeProvider _timeProvider;
-
-    public JobicyOpportunitySourceAdapter(HttpClient httpClient, JobicyAdapterOptions options,
-        IJobicyRequestRateLimiter rateLimiter, TimeProvider? timeProvider = null)
-    {
-        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-        _options = options ?? throw new ArgumentNullException(nameof(options));
-        _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
-        _timeProvider = timeProvider ?? TimeProvider.System;
-        _options.Validate();
-    }
-
     public SourceId SourceId => JobicySourceId;
 
-    public async Task<SourceSearchResult> SearchAsync(SourceExecutionTarget target, CancellationToken cancellationToken)
+    public Task<SourceSearchResult> SearchAsync(SourceExecutionTarget target, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(target);
         if (target.SourceId != SourceId) throw new ArgumentException("The target belongs to another source.", nameof(target));
-        if (!_options.Enabled) throw new InvalidOperationException("The experimental Jobicy adapter is disabled.");
-        if (target.Criteria.Any(criterion => criterion.IsMandatory &&
-            criterion.Disposition is CriterionDisposition.AppliedByProvider or CriterionDisposition.AppliedPostFetch))
+        if (!transport.Options.Enabled) throw new InvalidOperationException("The experimental Jobicy adapter is disabled.");
+        if (target.Criteria.Any(criterion => criterion.IsMandatory))
             throw new InvalidOperationException("Jobicy has no approved mandatory filter semantics.");
-        if (!_options.TryGetGeo(target.Market, out var geo))
-            throw new InvalidOperationException("No explicit Jobicy geo mapping exists for the requested market.");
 
-        using var timeout = new CancellationTokenSource(_options.RequestTimeout, _timeProvider);
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
-        var candidates = new List<SourceOpportunityCandidate>();
-        var externalIds = new HashSet<string>(StringComparer.Ordinal);
-        string? cursor = null;
-
-        for (var page = 0; page < _options.MaximumPages; page++)
-        {
-            var response = await GetPageAsync(geo, cursor, linked.Token);
-            foreach (var job in response.Jobs ?? [])
-            {
-                if (!TryCreateCandidate(job, target.Market, out var candidate) || !externalIds.Add(candidate.Provenance.ExternalId))
-                    continue;
-                candidates.Add(candidate);
-            }
-
-            cursor = response.NextCursor;
-            if (string.IsNullOrWhiteSpace(cursor)) break;
-        }
-
-        // No Jobicy filter semantics are approved in this experimental adapter.
-        return new SourceSearchResult(candidates.AsReadOnly(), []);
+        // Jobicy geo is remote-work eligibility geography; SourceMarkets is source publication
+        // market. No evidenced conversion exists, so do not label a broader geo response as target.Market.
+        throw new InvalidOperationException("Jobicy geo cannot be safely mapped to SourceMarkets.");
     }
 
-    private async Task<JobicyJobsResponse> GetPageAsync(string geo, string? cursor, CancellationToken cancellationToken)
-    {
-        for (var attempt = 0; ; attempt++)
-        {
-            await _rateLimiter.WaitAsync(cancellationToken);
-            using var request = new HttpRequestMessage(HttpMethod.Get, CreateJobsUri(geo, cursor));
-            using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-            if (response.StatusCode == HttpStatusCode.TooManyRequests && attempt == 0)
-            {
-                var delay = GetRetryDelay(response.Headers.RetryAfter);
-                if (delay > TimeSpan.Zero) await Task.Delay(delay, _timeProvider, cancellationToken);
-                continue;
-            }
-
-            response.EnsureSuccessStatusCode();
-            await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
-            var parsed = await JsonSerializer.DeserializeAsync<JobicyJobsResponse>(body, SerializerOptions, cancellationToken);
-            return parsed ?? throw new JsonException("Jobicy returned an empty JSON document.");
-        }
-    }
-
-    private Uri CreateJobsUri(string geo, string? cursor)
-    {
-        var query = $"count={_options.PageSize}&geo={Uri.EscapeDataString(geo)}";
-        if (!string.IsNullOrWhiteSpace(cursor)) query += $"&cursor={Uri.EscapeDataString(cursor)}";
-        return new Uri(_options.BaseAddress, $"api/jobs?{query}");
-    }
-
-    private TimeSpan GetRetryDelay(System.Net.Http.Headers.RetryConditionHeaderValue? retryAfter)
-    {
-        var delay = retryAfter?.Delta ?? (retryAfter?.Date - _timeProvider.GetUtcNow()) ?? TimeSpan.FromSeconds(1);
-        if (delay < TimeSpan.Zero) delay = TimeSpan.Zero;
-        return delay > _options.MaximumRetryDelay ? _options.MaximumRetryDelay : delay;
-    }
-
-    private bool TryCreateCandidate(JobicyJob job, CountryCode market, out SourceOpportunityCandidate candidate)
+    // Reserved for a later, approved source-market contract with evidence for the query scope.
+    internal static bool TryCreateCandidate(JobicyJob job, CountryCode market, DateTimeOffset retrievedAtUtc,
+        out SourceOpportunityCandidate candidate)
     {
         candidate = default!;
-        var externalId = job.Id?.Trim();
-        var sourceUrlText = job.Url ?? job.JobUrl;
-        if (string.IsNullOrWhiteSpace(externalId) || !Uri.TryCreate(sourceUrlText, UriKind.Absolute, out var sourceUrl) ||
-            sourceUrl.Scheme != Uri.UriSchemeHttps || !sourceUrl.Host.Equals("jobicy.com", StringComparison.OrdinalIgnoreCase) &&
-            !sourceUrl.Host.EndsWith(".jobicy.com", StringComparison.OrdinalIgnoreCase))
-            return false;
+        if (job.Id is null || !Uri.TryCreate(job.Url ?? job.JobUrl, UriKind.Absolute, out var sourceUrl) ||
+            sourceUrl.Scheme != Uri.UriSchemeHttps || (!sourceUrl.Host.Equals("jobicy.com", StringComparison.OrdinalIgnoreCase) &&
+            !sourceUrl.Host.EndsWith(".jobicy.com", StringComparison.OrdinalIgnoreCase))) return false;
 
         var fields = new Dictionary<string, SourceObservedValue>(StringComparer.Ordinal)
         {
-            ["title"] = Observed(job.JobTitle),
-            ["company"] = Observed(job.CompanyName),
-            ["jobGeo"] = Observed(job.JobGeo),
-            ["publishedAt"] = Observed(job.PubDate),
-            ["employmentType"] = Observed(job.JobType),
-            ["descriptionHtml"] = Observed(job.JobDescription),
-            ["salaryMinimum"] = Observed(job.AnnualSalaryMin),
-            ["salaryMaximum"] = Observed(job.AnnualSalaryMax),
+            ["title"] = Observed(job.JobTitle), ["company"] = Observed(job.CompanyName),
+            ["jobGeo"] = Observed(job.JobGeo), ["publishedAt"] = Observed(job.PubDate),
+            ["employmentType"] = Observed(job.JobType is { Count: > 0 } ? string.Join(", ", job.JobType) : null),
+            ["descriptionHtml"] = Observed(job.JobDescription), ["salaryMinimum"] = Observed(job.SalaryMin),
+            ["salaryMaximum"] = Observed(job.SalaryMax), ["salaryPeriod"] = Observed(job.SalaryPeriod),
             ["salaryCurrency"] = Observed(job.SalaryCurrency)
         };
         candidate = new SourceOpportunityCandidate(
-            new SourceProvenance(SourceId, externalId, sourceUrl, market, _timeProvider.GetUtcNow()),
+            new SourceProvenance(JobicySourceId, job.Id.Value.ToString(CultureInfo.InvariantCulture), sourceUrl, market, retrievedAtUtc),
             new ReadOnlyDictionary<string, SourceObservedValue>(fields));
         return true;
     }
 
     private static SourceObservedValue Observed(string? value) =>
         string.IsNullOrWhiteSpace(value) ? new(null, SourceFieldStatus.Unknown) : new(value, SourceFieldStatus.Present);
-    private static SourceObservedValue Observed(JsonElement? value) => value is null or { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined }
-        ? new(null, SourceFieldStatus.Unknown) : new(value.Value.ToString(), SourceFieldStatus.Present);
+    private static SourceObservedValue Observed(decimal? value) => value is null
+        ? new(null, SourceFieldStatus.Unknown) : new(value.Value.ToString(CultureInfo.InvariantCulture), SourceFieldStatus.Present);
+}
+
+public sealed class JobicyJobsTransport(IHttpClientFactory httpClientFactory, JobicyAdapterOptions options,
+    IJobicyRequestRateLimiter rateLimiter, TimeProvider? timeProvider = null)
+{
+    private readonly IHttpClientFactory _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
+    private readonly IJobicyRequestRateLimiter _rateLimiter = rateLimiter ?? throw new ArgumentNullException(nameof(rateLimiter));
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+    public JobicyAdapterOptions Options { get; } = options ?? throw new ArgumentNullException(nameof(options));
+
+    internal async Task<JobicyJobsResponse> GetPageAsync(string geo, string? cursor, CancellationToken cancellationToken)
+    {
+        Options.Validate();
+        for (var attempt = 0; ; attempt++)
+        {
+            await _rateLimiter.WaitAsync(cancellationToken);
+            using var httpClient = _httpClientFactory.CreateClient(JobicyAdapterOptions.HttpClientName);
+            using var request = new HttpRequestMessage(HttpMethod.Get, CreateJobsUri(geo, cursor));
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+            if (response.StatusCode == HttpStatusCode.TooManyRequests && attempt == 0)
+            {
+                var delay = GetRetryDelay(response.Headers.RetryAfter);
+                if (delay is null) response.EnsureSuccessStatusCode();
+                if (delay > TimeSpan.Zero) await Task.Delay(delay.Value, _timeProvider, cancellationToken);
+                continue;
+            }
+            response.EnsureSuccessStatusCode();
+            await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
+            var parsed = await JsonSerializer.DeserializeAsync<JobicyJobsResponse>(body, SerializerOptions, cancellationToken);
+            if (parsed is null) throw new JsonException("Jobicy returned an empty JSON document.");
+            if (parsed.Success is false) throw new HttpRequestException("Jobicy returned success=false.");
+            return parsed;
+        }
+    }
+
+    private Uri CreateJobsUri(string geo, string? cursor)
+    {
+        var query = $"count={Options.PageSize}&geo={Uri.EscapeDataString(geo)}";
+        if (!string.IsNullOrWhiteSpace(cursor)) query += $"&cursor={Uri.EscapeDataString(cursor)}";
+        return new Uri(Options.BaseAddress, $"api/jobs?{query}");
+    }
+
+    private TimeSpan? GetRetryDelay(System.Net.Http.Headers.RetryConditionHeaderValue? retryAfter)
+    {
+        var delay = retryAfter?.Delta ?? (retryAfter?.Date - _timeProvider.GetUtcNow()) ?? TimeSpan.FromSeconds(1);
+        if (delay < TimeSpan.Zero) delay = TimeSpan.Zero;
+        return delay > Options.MaximumRetryDelay ? null : delay;
+    }
 
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web)
-    {
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Skip
-    };
+    { UnmappedMemberHandling = JsonUnmappedMemberHandling.Skip };
+}
 
-    private sealed class JobicyJobsResponse
-    {
-        [JsonPropertyName("jobs")] public List<JobicyJob>? Jobs { get; init; }
-        [JsonPropertyName("nextCursor")] public string? NextCursor { get; init; }
-    }
+internal sealed class JobicyJobsResponse
+{
+    [JsonPropertyName("success")] public bool? Success { get; init; }
+    [JsonPropertyName("jobs")] public List<JobicyJob>? Jobs { get; init; }
+    [JsonPropertyName("nextCursor")] public string? NextCursor { get; init; }
+}
 
-    private sealed class JobicyJob
-    {
-        [JsonPropertyName("id")] public string? Id { get; init; }
-        [JsonPropertyName("url")] public string? Url { get; init; }
-        [JsonPropertyName("jobUrl")] public string? JobUrl { get; init; }
-        [JsonPropertyName("jobTitle")] public string? JobTitle { get; init; }
-        [JsonPropertyName("companyName")] public string? CompanyName { get; init; }
-        [JsonPropertyName("jobGeo")] public string? JobGeo { get; init; }
-        [JsonPropertyName("pubDate")] public string? PubDate { get; init; }
-        [JsonPropertyName("jobType")] public string? JobType { get; init; }
-        [JsonPropertyName("jobDescription")] public string? JobDescription { get; init; }
-        [JsonPropertyName("annualSalaryMin")] public JsonElement? AnnualSalaryMin { get; init; }
-        [JsonPropertyName("annualSalaryMax")] public JsonElement? AnnualSalaryMax { get; init; }
-        [JsonPropertyName("salaryCurrency")] public string? SalaryCurrency { get; init; }
-    }
+internal sealed class JobicyJob
+{
+    [JsonPropertyName("id")] public long? Id { get; init; }
+    [JsonPropertyName("url")] public string? Url { get; init; }
+    [JsonPropertyName("jobUrl")] public string? JobUrl { get; init; }
+    [JsonPropertyName("jobTitle")] public string? JobTitle { get; init; }
+    [JsonPropertyName("companyName")] public string? CompanyName { get; init; }
+    [JsonPropertyName("jobGeo")] public string? JobGeo { get; init; }
+    [JsonPropertyName("pubDate")] public string? PubDate { get; init; }
+    [JsonPropertyName("jobType")] public List<string>? JobType { get; init; }
+    [JsonPropertyName("jobDescription")] public string? JobDescription { get; init; }
+    [JsonPropertyName("salaryMin")] public decimal? SalaryMin { get; init; }
+    [JsonPropertyName("salaryMax")] public decimal? SalaryMax { get; init; }
+    [JsonPropertyName("salaryPeriod")] public string? SalaryPeriod { get; init; }
+    [JsonPropertyName("salaryCurrency")] public string? SalaryCurrency { get; init; }
 }

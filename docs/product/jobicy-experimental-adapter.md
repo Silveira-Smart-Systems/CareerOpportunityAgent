@@ -11,10 +11,11 @@ returns transient `SourceOpportunityCandidate` values and does not ingest, persi
 deduplicate globally, match, notify, or expose UI/API endpoints.
 
 The adapter cannot be reached automatically: `Discovery:Jobicy:Enabled` defaults to `false`.
-It also requires an explicit country-code-to-Jobicy-geo mapping. That mapping is a query
-configuration only; it is not evidence that Jobicy covers that country. `SourceCapabilities`,
-execution policy, runtime state and `ISourceExecutionGate` remain the separate authority that
-must permit a source-market request.
+Jobicy documents `geo` as remote-work eligibility geography, not as a source-publication
+market. Consequently this phase has **no** country-to-`geo` mapping and the enabled adapter
+fails closed before HTTP: it cannot label a broader Jobicy geo response as a `SourceMarket`.
+`SourceCapabilities`, execution policy, runtime state and `ISourceExecutionGate` remain the
+separate authority that must permit a source-market request.
 
 ## Provenance and safety
 
@@ -44,10 +45,12 @@ post-fetch-applied. It returns no `AppliedCriteria` itself.
 
 ## HTTP boundary
 
-The documented public jobs endpoint is called only after explicit enablement, planner and gate
-approval. Requests use cancellation/timeout, a bounded cursor count, defensive JSON parsing,
-one bounded retry for 429 respecting `Retry-After`, and duplicate provider-ID suppression within
-one response sequence. The default process-local limiter keeps requests one second apart.
+The documented public jobs endpoint remains isolated behind the adapter transport, but is not
+called by this phase because there is no safe source-market query scope. Once a later approved
+contract supplies that scope, requests must use cancellation/timeout, a bounded cursor count,
+defensive JSON parsing, one bounded retry for 429 respecting the full `Retry-After`, and duplicate
+provider-ID suppression within one response sequence. The default process-local limiter keeps
+requests one second apart.
 
 The default limiter is suitable only for one execution instance. A multi-instance deployment
 must supply a shared `IJobicyRequestRateLimiter` implementation before source enablement; this

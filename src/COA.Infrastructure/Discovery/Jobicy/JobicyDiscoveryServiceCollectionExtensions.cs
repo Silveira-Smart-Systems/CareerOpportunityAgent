@@ -24,11 +24,13 @@ public static class JobicyDiscoveryServiceCollectionExtensions
         services.AddSingleton(options);
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.TryAddSingleton<IJobicyRequestRateLimiter, InProcessJobicyRequestRateLimiter>();
-        services.AddHttpClient<JobicyOpportunitySourceAdapter>((provider, client) =>
+        services.AddHttpClient(JobicyAdapterOptions.HttpClientName, (provider, client) =>
         {
             client.BaseAddress = provider.GetRequiredService<JobicyAdapterOptions>().BaseAddress;
             client.Timeout = Timeout.InfiniteTimeSpan;
         });
+        services.TryAddSingleton<JobicyJobsTransport>();
+        services.TryAddSingleton<JobicyOpportunitySourceAdapter>();
         services.AddSingleton<IOpportunitySourceAdapter>(provider => provider.GetRequiredService<JobicyOpportunitySourceAdapter>());
         services.TryAddSingleton<IOpportunitySourceAdapterResolver, OpportunitySourceAdapterResolver>();
         return services;

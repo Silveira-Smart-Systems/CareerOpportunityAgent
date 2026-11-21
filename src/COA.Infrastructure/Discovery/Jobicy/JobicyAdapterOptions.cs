@@ -6,6 +6,7 @@ namespace COA.Infrastructure.Discovery.Jobicy;
 public sealed class JobicyAdapterOptions
 {
     public const string SectionName = "Discovery:Jobicy";
+    public const string HttpClientName = "JobicyDiscovery";
 
     /// <summary>The adapter makes no HTTP request unless this is explicitly enabled.</summary>
     public bool Enabled { get; init; }
@@ -15,11 +16,6 @@ public sealed class JobicyAdapterOptions
     public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromSeconds(15);
     public TimeSpan MaximumRetryDelay { get; init; } = TimeSpan.FromSeconds(30);
 
-    // This is an operator-supplied query mapping, not a declaration of source coverage.
-    // The capability registry remains the authority for whether a market is eligible.
-    public Dictionary<string, string> MarketGeo { get; init; } =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
     public void Validate()
     {
         if (!BaseAddress.IsAbsoluteUri || BaseAddress.Scheme != Uri.UriSchemeHttps)
@@ -28,14 +24,7 @@ public sealed class JobicyAdapterOptions
         if (MaximumPages is < 1 or > 10) throw new ArgumentOutOfRangeException(nameof(MaximumPages));
         if (RequestTimeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(RequestTimeout));
         if (MaximumRetryDelay < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(MaximumRetryDelay));
-        if (MarketGeo is null || MarketGeo.Any(pair => !IsCountryCode(pair.Key) || string.IsNullOrWhiteSpace(pair.Value)))
-            throw new ArgumentException("Market-to-geo mappings must contain country codes and nonempty Jobicy geo values.", nameof(MarketGeo));
     }
-
-    public bool TryGetGeo(CountryCode market, out string geo) =>
-        MarketGeo.TryGetValue(market.Value, out geo!);
-
-    private static bool IsCountryCode(string? value) => value is { Length: 2 } && value.All(char.IsAsciiLetter);
 }
 
 public interface IJobicyRequestRateLimiter
