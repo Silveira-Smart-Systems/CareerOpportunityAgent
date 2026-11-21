@@ -55,15 +55,30 @@ public enum FilterSupport
     UnknownSemantics
 }
 
-public sealed record SearchRequest(
-    IReadOnlySet<CountryCode> SourceMarkets,
-    IReadOnlySet<string> Categories,
-    IReadOnlySet<string> TargetRoles,
-    IReadOnlySet<string> WorkModes,
-    CountryCode? RemoteFromCountry,
-    IReadOnlySet<SearchCriterion> MandatoryCriteria,
-    IReadOnlySet<SearchCriterion> PreferredCriteria)
+public sealed record SearchRequest
 {
+    public SearchRequest(IEnumerable<CountryCode> sourceMarkets, IEnumerable<string> categories,
+        IEnumerable<string> targetRoles, IEnumerable<string> workModes, CountryCode? remoteFromCountry,
+        IEnumerable<SearchCriterion> mandatoryCriteria, IEnumerable<SearchCriterion> preferredCriteria)
+    {
+        SourceMarkets = Freeze(sourceMarkets, nameof(sourceMarkets));
+        Categories = FreezeText(categories, nameof(categories));
+        TargetRoles = FreezeText(targetRoles, nameof(targetRoles));
+        WorkModes = FreezeText(workModes, nameof(workModes));
+        RemoteFromCountry = remoteFromCountry;
+        MandatoryCriteria = Freeze(mandatoryCriteria, nameof(mandatoryCriteria));
+        PreferredCriteria = Freeze(preferredCriteria, nameof(preferredCriteria));
+        Validate();
+    }
+
+    public IReadOnlySet<CountryCode> SourceMarkets { get; }
+    public IReadOnlySet<string> Categories { get; }
+    public IReadOnlySet<string> TargetRoles { get; }
+    public IReadOnlySet<string> WorkModes { get; }
+    public CountryCode? RemoteFromCountry { get; }
+    public IReadOnlySet<SearchCriterion> MandatoryCriteria { get; }
+    public IReadOnlySet<SearchCriterion> PreferredCriteria { get; }
+
     public void Validate()
     {
         ArgumentNullException.ThrowIfNull(SourceMarkets);
@@ -77,6 +92,21 @@ public sealed record SearchRequest(
             throw new ArgumentException("At least one source market is required.", nameof(SourceMarkets));
         if (MandatoryCriteria.Overlaps(PreferredCriteria))
             throw new ArgumentException("A criterion cannot be both mandatory and preferred.");
+    }
+
+    public bool HasSameIntent(SearchRequest other) => other is not null &&
+        SourceMarkets.SetEquals(other.SourceMarkets) && Categories.SetEquals(other.Categories) &&
+        TargetRoles.SetEquals(other.TargetRoles) && WorkModes.SetEquals(other.WorkModes) &&
+        RemoteFromCountry == other.RemoteFromCountry && MandatoryCriteria.SetEquals(other.MandatoryCriteria) &&
+        PreferredCriteria.SetEquals(other.PreferredCriteria);
+
+    private static IReadOnlySet<T> Freeze<T>(IEnumerable<T> values, string name) =>
+        (values ?? throw new ArgumentNullException(name)).ToFrozenSet();
+    private static IReadOnlySet<string> FreezeText(IEnumerable<string> values, string name)
+    {
+        var copied = (values ?? throw new ArgumentNullException(name)).ToArray();
+        if (copied.Any(string.IsNullOrWhiteSpace)) throw new ArgumentException("Search values must be nonempty.", name);
+        return copied.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
     }
 }
 
@@ -301,16 +331,38 @@ public sealed record PlannedCriterion(
     bool IsMandatory,
     CriterionDisposition Disposition);
 
-public sealed record PlannedSource(
-    SourceId SourceId,
-    IReadOnlySet<CountryCode> SelectedMarkets,
-    bool IsEligible,
-    IReadOnlyList<SourcePlanReason> Reasons,
-    IReadOnlyList<PlannedCriterion> Criteria);
-
-public sealed record DiscoveryPlan(IReadOnlyList<PlannedSource> Sources)
+public sealed record PlannedSource
 {
+    public PlannedSource(SourceId sourceId, IEnumerable<CountryCode> selectedMarkets, bool isEligible,
+        IEnumerable<SourcePlanReason> reasons, IEnumerable<PlannedCriterion> criteria)
+    {
+        SourceId = sourceId;
+        SelectedMarkets = (selectedMarkets ?? throw new ArgumentNullException(nameof(selectedMarkets))).ToFrozenSet();
+        IsEligible = isEligible;
+        Reasons = Array.AsReadOnly((reasons ?? throw new ArgumentNullException(nameof(reasons))).ToArray());
+        Criteria = Array.AsReadOnly((criteria ?? throw new ArgumentNullException(nameof(criteria))).ToArray());
+    }
+    public SourceId SourceId { get; }
+    public IReadOnlySet<CountryCode> SelectedMarkets { get; }
+    public bool IsEligible { get; }
+    public IReadOnlyList<SourcePlanReason> Reasons { get; }
+    public IReadOnlyList<PlannedCriterion> Criteria { get; }
+}
+
+public sealed record DiscoveryPlan
+{
+    public DiscoveryPlan(SearchRequest searchRequest, IEnumerable<PlannedSource> sources)
+    {
+        SearchRequest = searchRequest ?? throw new ArgumentNullException(nameof(searchRequest));
+        var copied = (sources ?? throw new ArgumentNullException(nameof(sources))).OrderBy(source => source.SourceId.Value, StringComparer.Ordinal).ToArray();
+        if (copied.Any(source => source is null) || copied.Select(source => source.SourceId).Distinct().Count() != copied.Length)
+            throw new ArgumentException("A discovery plan requires unique, nonnull sources.", nameof(sources));
+        Sources = Array.AsReadOnly(copied);
+    }
+    public SearchRequest SearchRequest { get; }
+    public IReadOnlyList<PlannedSource> Sources { get; }
     public IReadOnlyList<PlannedSource> EligibleSources => Sources.Where(source => source.IsEligible).ToArray();
+    public bool Matches(SearchRequest request) => SearchRequest.HasSameIntent(request);
 }
 
 public interface IDiscoveryPlanner
