@@ -70,6 +70,42 @@ sample response is available. It must obtain at most one small sample and, only 
 real ID, one status call. The capability registry must not claim listing availability, full payload
 fields, freshness, country eligibility or status semantics from this run.
 
+## Second controlled Jobicy evaluation — 2026-11-21
+
+Under the separate Product Owner authorization in #7067660314, a local HTTP client made exactly
+two sequential public requests without credentials or retries. The interval between requests was
+greater than one second. No raw response, real ID or full description was retained.
+
+| Request | HTTP / Content-Type | Sanitized observation |
+|---|---|---|
+| `GET /api/jobs?count=5&geo=europe` | `200`; `application/json; charset=utf-8` | Five jobs returned (`jobCount=5`); all five had an ID and a Jobicy-hosted URL. Root response fields included API version, documentation URL, `lastUpdate`, cursor fields, applied filters, jobs, status code and success. Job geographies were UK; Poland; France/UK; France/Germany; and Hungary/Poland/Romania/Serbia/Slovakia/Spain. All dates were 2026-11-21 timestamps. |
+| `GET /api/jobs/status?ids=<one returned ID>` | `200`; `application/json; charset=utf-8` | One status record returned; status was `active`. Root fields included API version, `checkedAt`, count, jobs, status code and success. |
+
+Sample field quality, without retaining descriptions:
+
+- Titles and employer names were present in all five records. The observed roles spanned property
+  advocacy, software engineering, sales engineering, onboarding and contract management.
+- `jobDescription` was present in all five records, with lengths from 2,497 to 7,527 characters.
+  This proves presence, not that every requirement is complete, current or semantically safe for
+  post-filtering.
+- All five exposed `jobType=Full-Time`. Salary was populated for one of five, with a yearly period
+  and PLN currency; absence in four records remains Unknown rather than evidence of no salary.
+- The public URLs resolved to the Jobicy host, consistent with the documented public-API linking
+  model. No job page or external application page was opened.
+
+PT and BR remain distinct taxonomy slugs from the first controlled request, but this Europe sample
+does not prove that a PT or BR query returns relevant vacancies. `jobGeo` reports advertised
+geography, not country-of-work eligibility. None of the two calls establishes that a candidate in
+Portugal or Brazil may work remotely for any listing.
+
+**Updated decision: CONDITIONAL GO for a Jobicy adapter remains appropriate; production is not
+approved.** The run establishes basic HTTP/schema/provenance/freshness/status viability for a
+Europe query. Before adapter approval, obtain human review of the evidence and separately decide
+whether country-specific PT and BR coverage needs a bounded test. Until observed per source,
+`RemoteFromCountry`, Language, Skill, ExcludedKeyword and any `SafePostFilter` remain
+`UnknownSemantics` or `Unsupported`. Salary and Contract may be represented only as observed
+optional fields; their provider-filter semantics are still unproven.
+
 ## Approval gates and first-adapter plan
 
 1. **Human decision:** approve or reject the Jobicy CONDITIONAL GO and confirm that Jobicy attribution and Jobicy-hosted application links are acceptable in the product UX.
