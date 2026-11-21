@@ -16,13 +16,15 @@ builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ITicketStore, InMemoryTicketStore>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.Configure<CoaApiOptions>(options =>
-    options.BaseUrl = builder.Configuration["COA_API_BASE_URL"] ?? string.Empty);
+    options.BaseUrl = builder.Configuration["CoaApi:BaseUrl"]
+        ?? builder.Configuration["COA_API_BASE_URL"]
+        ?? string.Empty);
 builder.Services.AddHttpClient<CoaApiClient>((serviceProvider, client) =>
 {
     var apiOptions = serviceProvider.GetRequiredService<IOptions<CoaApiOptions>>().Value;
     if (!Uri.TryCreate(apiOptions.BaseUrl, UriKind.Absolute, out var baseAddress))
     {
-        throw new InvalidOperationException("COA_API_BASE_URL must be an absolute URI.");
+        throw new InvalidOperationException("CoaApi:BaseUrl or COA_API_BASE_URL must be an absolute URI.");
     }
 
     client.BaseAddress = new Uri(baseAddress.ToString().TrimEnd('/') + "/");
