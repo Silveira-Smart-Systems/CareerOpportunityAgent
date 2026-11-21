@@ -13,7 +13,7 @@ public sealed class DiscoveryPlanner : IDiscoveryPlanner
             .Select(source => PlanSource(request, source))
             .ToArray();
 
-        return new DiscoveryPlan(sources);
+        return new DiscoveryPlan(request, sources);
     }
 
     private static PlannedSource PlanSource(SearchRequest request, SourcePlanningState source)

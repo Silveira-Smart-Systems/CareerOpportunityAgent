@@ -27,6 +27,8 @@ The planner may select zero, one, or several sources. A mandatory criterion must
 
 `IDiscoveryOrchestrator` is a later concern. It executes a plan with bounded concurrency and timeouts, revalidates policy and runtime status immediately before calls, and isolates partial failures. It is not part of Foundation.
 
+For execution, the current policy/runtime decision is made through one `ISourceExecutionGate` port. The gate atomically authorizes and reserves one source-market attempt, returning either a block reason or a `SourceExecutionPermit`; it must fail closed when it cannot reserve quota or budget safely. The orchestrator marks the permit started immediately before calling an adapter, consumes it after any started attempt (success, failure, timeout or post-start cancellation), and releases it only if cancellation occurs before the attempt starts. This defines a boundary for a future source-specific reservation implementation without adding a billing or distributed-rate-limit subsystem.
+
 Adapters are Infrastructure implementations. Each encapsulates authentication and external API details, translates planned neutral criteria to provider parameters, and returns a common intermediate `SourceOpportunityCandidate`. It preserves source identifiers, URLs, provenance, observed values, unknown attributes, and structured failures. It does not perform global normalization, deduplication, persistence, or matching.
 
 Discovery and ingestion remain separate. Discovery selects and searches sources. A later ingestion pipeline validates data-use rights, normalizes candidates, preserves source occurrences/provenance, deduplicates, and persists only when authorized. Matching remains a separate evaluation of a search profile against a normalized global opportunity.
