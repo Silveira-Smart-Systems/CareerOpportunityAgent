@@ -50,6 +50,26 @@ This does **not** solve the market objective by itself: the public documentation
 
 Adzuna remains a useful BR/GB discovery candidate only after a written commercial licence; it is not a PT source and its short descriptions rule it out for full-requirements matching. EURES is valuable market context but is not a lawful COA adapter without partner status/permission. Remotive requires a commercial agreement compatible with an authenticated product before reconsideration.
 
+## Controlled Jobicy evaluation — 2026-11-21
+
+Approved limit: three public, sequential GET requests without credentials. This assessment used two
+attempts and deliberately made no retry.
+
+| Attempt | Endpoint | Observed result | Consequence |
+|---|---|---|---|
+| 1 | `GET /api/jobs?get=locations` | JSON taxonomy returned. It includes distinct `portugal`, `brazil`, `europe`, `emea`, `latam` and `anywhere` slugs. The evaluation client did not expose an HTTP status code, so the documented fact is a successfully received JSON body, not a separately verified status value. | PT, BR and Europe are valid documented taxonomy choices. This does not prove that any current listing is eligible for, or available in, those places. |
+| 2 | `GET /api/jobs?count=5&geo=europe` | The evaluation client returned an accessibility error before exposing an HTTP response or job payload. Treat this conservatively as an attempted call; do not retry within this approval. | No real job ID, URL, description, timestamp, employer, salary, contract, freshness or status evidence was obtained. The third permitted call remains unused. |
+
+No status endpoint was called because attempt 2 produced no valid ID. No raw payload or personal data
+was stored. The accessibility failure is a tooling/environment limitation, not evidence that the
+Jobicy endpoint is unavailable.
+
+**Updated decision: CONDITIONAL GO remains unchanged, but adapter approval is not yet justified.**
+Authorize a new, separately bounded evaluation only when a client capable of observing the public
+sample response is available. It must obtain at most one small sample and, only if it receives a
+real ID, one status call. The capability registry must not claim listing availability, full payload
+fields, freshness, country eligibility or status semantics from this run.
+
 ## Approval gates and first-adapter plan
 
 1. **Human decision:** approve or reject the Jobicy CONDITIONAL GO and confirm that Jobicy attribution and Jobicy-hosted application links are acceptable in the product UX.
