@@ -15,10 +15,11 @@ public sealed class ApiJobSearchProfileEndpointsTests(SqlServerFixture fixture) 
         var created = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement; var id = created.GetProperty("id").GetGuid();
         var list = await client.GetAsync("/api/search-profiles");
         var update = await Send(client, HttpMethod.Put, $"/api/search-profiles/{id}", Payload("Leadership", 1));
+        Assert.Equal(HttpStatusCode.OK, update.StatusCode);
+        var afterUpdate = JsonDocument.Parse(await (await client.GetAsync($"/api/search-profiles/{id}")).Content.ReadAsStringAsync()).RootElement;
         var deactivate = await Send(client, HttpMethod.Patch, $"/api/search-profiles/{id}/activation", "{\"expectedVersion\":2,\"isActive\":false}");
         var delete = await client.DeleteAsync($"/api/search-profiles/{id}?expectedVersion=3");
-        var afterUpdate = JsonDocument.Parse(await (await client.GetAsync($"/api/search-profiles/{id}")).Content.ReadAsStringAsync()).RootElement;
-        Assert.Equal(HttpStatusCode.Created, create.StatusCode); Assert.Equal(HttpStatusCode.OK, list.StatusCode); Assert.Equal(HttpStatusCode.OK, update.StatusCode); Assert.Equal("Technology", afterUpdate.GetProperty("preferences").GetProperty("categories")[0].GetString()); Assert.Equal(HttpStatusCode.OK, deactivate.StatusCode); Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode); Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/search-profiles/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode); Assert.Equal(HttpStatusCode.OK, list.StatusCode); Assert.Equal("Technology", afterUpdate.GetProperty("preferences").GetProperty("categories")[0].GetString()); Assert.Equal(HttpStatusCode.OK, deactivate.StatusCode); Assert.Equal(HttpStatusCode.NoContent, delete.StatusCode); Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/search-profiles/{id}")).StatusCode);
     }
     [Fact]
     public async Task Other_owner_cannot_read_or_mutate_and_stale_version_conflicts()
