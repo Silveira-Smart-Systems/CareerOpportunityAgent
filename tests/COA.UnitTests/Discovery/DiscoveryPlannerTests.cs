@@ -99,6 +99,50 @@ public sealed class DiscoveryPlannerTests
         Assert.Equal(CriterionDisposition.UnknownSemantics, criterion.Disposition);
     }
 
+    [Fact]
+    public void Preferred_unsupported_filter_is_diagnosed_without_claiming_it_was_applied()
+    {
+        var request = new SearchRequest(
+            Markets(UnitedKingdom), ["Technology"], ["Architect"], [], null, [], null, [], [], ["intern"],
+            Criteria(SearchCriterion.Category, SearchCriterion.TargetRole), Criteria(SearchCriterion.ExcludedKeyword));
+
+        var plan = CreatePlan(request, Adzuna(filters: new Dictionary<SearchCriterion, FilterSupport>
+        {
+            [SearchCriterion.Category] = FilterSupport.SupportedByProvider,
+            [SearchCriterion.TargetRole] = FilterSupport.SupportedByProvider,
+            [SearchCriterion.ExcludedKeyword] = FilterSupport.Unsupported
+        }));
+
+        var source = Assert.Single(plan.EligibleSources);
+        var criterion = Assert.Single(source.Criteria, item => item.Criterion == SearchCriterion.ExcludedKeyword);
+        Assert.False(criterion.IsMandatory); Assert.Equal(CriterionDisposition.Unsupported, criterion.Disposition);
+    }
+
+    [Theory]
+    [InlineData(SearchCriterion.Contract, FilterSupport.Unsupported)]
+    [InlineData(SearchCriterion.Contract, FilterSupport.UnknownSemantics)]
+    [InlineData(SearchCriterion.Salary, FilterSupport.Unsupported)]
+    [InlineData(SearchCriterion.Salary, FilterSupport.UnknownSemantics)]
+    [InlineData(SearchCriterion.Language, FilterSupport.Unsupported)]
+    [InlineData(SearchCriterion.Language, FilterSupport.UnknownSemantics)]
+    [InlineData(SearchCriterion.Skill, FilterSupport.Unsupported)]
+    [InlineData(SearchCriterion.Skill, FilterSupport.UnknownSemantics)]
+    [InlineData(SearchCriterion.ExcludedKeyword, FilterSupport.Unsupported)]
+    [InlineData(SearchCriterion.ExcludedKeyword, FilterSupport.UnknownSemantics)]
+    public void Each_new_mandatory_filter_fails_closed_when_not_safely_supported(SearchCriterion criterion, FilterSupport support)
+    {
+        var request = new SearchRequest(Markets(UnitedKingdom), ["Technology"], ["Architect"], [], null,
+            ["Permanent"], new COA.Domain.SearchProfiles.SalaryPreference(1m, null, "EUR", COA.Domain.SearchProfiles.SalaryPeriod.Monthly),
+            ["English"], ["C#"], ["intern"], Criteria(criterion), []);
+
+        var plan = CreatePlan(request, Adzuna(filters: new Dictionary<SearchCriterion, FilterSupport> { [criterion] = support }));
+
+        var source = Assert.Single(plan.Sources);
+        Assert.False(source.IsEligible); Assert.Contains(SourcePlanReason.MandatoryCriterionUnsupported, source.Reasons);
+        Assert.Equal(support == FilterSupport.Unsupported ? CriterionDisposition.Unsupported : CriterionDisposition.UnknownSemantics,
+            Assert.Single(source.Criteria).Disposition);
+    }
+
     [Theory]
     [InlineData(false, true, SourceHealth.Healthy, CapacityAvailability.Available, CapacityAvailability.Available, SourcePlanReason.NotAuthorized)]
     [InlineData(true, false, SourceHealth.Healthy, CapacityAvailability.Available, CapacityAvailability.Available, SourcePlanReason.LicenseDoesNotAllowDiscovery)]

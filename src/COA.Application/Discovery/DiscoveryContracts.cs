@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using System.Collections.ObjectModel;
+using COA.Domain.SearchProfiles;
 
 namespace COA.Application.Discovery;
 
@@ -60,12 +61,27 @@ public sealed record SearchRequest
     public SearchRequest(IEnumerable<CountryCode> sourceMarkets, IEnumerable<string> categories,
         IEnumerable<string> targetRoles, IEnumerable<string> workModes, CountryCode? remoteFromCountry,
         IEnumerable<SearchCriterion> mandatoryCriteria, IEnumerable<SearchCriterion> preferredCriteria)
+        : this(sourceMarkets, categories, targetRoles, workModes, remoteFromCountry, [], null, [], [], [],
+            mandatoryCriteria, preferredCriteria)
+    {
+    }
+
+    public SearchRequest(IEnumerable<CountryCode> sourceMarkets, IEnumerable<string> categories,
+        IEnumerable<string> targetRoles, IEnumerable<string> workModes, CountryCode? remoteFromCountry,
+        IEnumerable<string> employmentTypes, SalaryPreference? salaryPreference, IEnumerable<string> languages,
+        IEnumerable<string> skills, IEnumerable<string> excludedKeywords,
+        IEnumerable<SearchCriterion> mandatoryCriteria, IEnumerable<SearchCriterion> preferredCriteria)
     {
         SourceMarkets = Freeze(sourceMarkets, nameof(sourceMarkets));
-        Categories = FreezeText(categories, nameof(categories));
-        TargetRoles = FreezeText(targetRoles, nameof(targetRoles));
-        WorkModes = FreezeText(workModes, nameof(workModes));
+        Categories = FreezeText(categories, 100, nameof(categories));
+        TargetRoles = FreezeText(targetRoles, 200, nameof(targetRoles));
+        WorkModes = FreezeText(workModes, 100, nameof(workModes));
         RemoteFromCountry = remoteFromCountry;
+        EmploymentTypes = FreezeText(employmentTypes, 100, nameof(employmentTypes));
+        SalaryPreference = salaryPreference;
+        Languages = FreezeText(languages, 100, nameof(languages));
+        Skills = FreezeText(skills, 200, nameof(skills));
+        ExcludedKeywords = FreezeText(excludedKeywords, 200, nameof(excludedKeywords));
         MandatoryCriteria = Freeze(mandatoryCriteria, nameof(mandatoryCriteria));
         PreferredCriteria = Freeze(preferredCriteria, nameof(preferredCriteria));
         Validate();
@@ -76,6 +92,11 @@ public sealed record SearchRequest
     public IReadOnlySet<string> TargetRoles { get; }
     public IReadOnlySet<string> WorkModes { get; }
     public CountryCode? RemoteFromCountry { get; }
+    public IReadOnlySet<string> EmploymentTypes { get; }
+    public SalaryPreference? SalaryPreference { get; }
+    public IReadOnlySet<string> Languages { get; }
+    public IReadOnlySet<string> Skills { get; }
+    public IReadOnlySet<string> ExcludedKeywords { get; }
     public IReadOnlySet<SearchCriterion> MandatoryCriteria { get; }
     public IReadOnlySet<SearchCriterion> PreferredCriteria { get; }
 
@@ -85,6 +106,10 @@ public sealed record SearchRequest
         ArgumentNullException.ThrowIfNull(Categories);
         ArgumentNullException.ThrowIfNull(TargetRoles);
         ArgumentNullException.ThrowIfNull(WorkModes);
+        ArgumentNullException.ThrowIfNull(EmploymentTypes);
+        ArgumentNullException.ThrowIfNull(Languages);
+        ArgumentNullException.ThrowIfNull(Skills);
+        ArgumentNullException.ThrowIfNull(ExcludedKeywords);
         ArgumentNullException.ThrowIfNull(MandatoryCriteria);
         ArgumentNullException.ThrowIfNull(PreferredCriteria);
 
@@ -92,21 +117,26 @@ public sealed record SearchRequest
             throw new ArgumentException("At least one source market is required.", nameof(SourceMarkets));
         if (MandatoryCriteria.Overlaps(PreferredCriteria))
             throw new ArgumentException("A criterion cannot be both mandatory and preferred.");
+        SalaryPreference?.Validate();
     }
 
     public bool HasSameIntent(SearchRequest other) => other is not null &&
         SourceMarkets.SetEquals(other.SourceMarkets) && Categories.SetEquals(other.Categories) &&
         TargetRoles.SetEquals(other.TargetRoles) && WorkModes.SetEquals(other.WorkModes) &&
-        RemoteFromCountry == other.RemoteFromCountry && MandatoryCriteria.SetEquals(other.MandatoryCriteria) &&
+        RemoteFromCountry == other.RemoteFromCountry && EmploymentTypes.SetEquals(other.EmploymentTypes) &&
+        SalaryPreference == other.SalaryPreference && Languages.SetEquals(other.Languages) &&
+        Skills.SetEquals(other.Skills) && ExcludedKeywords.SetEquals(other.ExcludedKeywords) &&
+        MandatoryCriteria.SetEquals(other.MandatoryCriteria) &&
         PreferredCriteria.SetEquals(other.PreferredCriteria);
 
     private static IReadOnlySet<T> Freeze<T>(IEnumerable<T> values, string name) =>
         (values ?? throw new ArgumentNullException(name)).ToFrozenSet();
-    private static IReadOnlySet<string> FreezeText(IEnumerable<string> values, string name)
+    private static IReadOnlySet<string> FreezeText(IEnumerable<string> values, int maximumLength, string name)
     {
         var copied = (values ?? throw new ArgumentNullException(name)).ToArray();
         if (copied.Any(string.IsNullOrWhiteSpace)) throw new ArgumentException("Search values must be nonempty.", name);
-        return copied.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+        if (copied.Any(value => value.Trim().Length > maximumLength)) throw new ArgumentException("Search values exceed the supported length.", name);
+        return copied.Select(value => value.Trim()).ToFrozenSet(StringComparer.OrdinalIgnoreCase);
     }
 }
 
