@@ -6,6 +6,7 @@ namespace COA.UnitTests.Discovery;
 public sealed class DiscoveryOrchestratorTests
 {
     private static readonly CountryCode Gb = new("GB");
+    private static readonly CountryCode Br = new("BR");
 
     [Fact]
     public async Task Zero_sources_makes_no_adapter_or_gate_call()
@@ -62,6 +63,26 @@ public sealed class DiscoveryOrchestratorTests
     }
 
     [Fact]
+    public async Task Multi_market_fan_out_is_once_per_market_and_outcomes_are_sorted()
+    {
+        var request = new SearchRequest([Br, Gb], ["Technology"], ["Architect"], ["Remote"], null, [SearchCriterion.TargetRole], []);
+        var source = new PlannedSource(new SourceId("one"), [Gb, Br], true, [SourcePlanReason.Eligible], [new PlannedCriterion(SearchCriterion.TargetRole, true, CriterionDisposition.AppliedByProvider)]);
+        var adapter = new RecordingAdapter("one");
+        var result = await Create(new FakeGate(), adapter).ExecuteAsync(request, new DiscoveryPlan(request, [source]), Options());
+        Assert.Equal([Br, Gb], adapter.Markets.OrderBy(x => x.Value));
+        Assert.Equal([Br, Gb], result.Sources.Select(x => x.Market));
+    }
+
+    [Fact]
+    public async Task Adapter_failure_is_isolated_from_other_source()
+    {
+        var plan = new DiscoveryPlan(Request(), [Source("bad", true), Source("one", true)]);
+        var result = await Create(new FakeGate(), new ThrowingAdapter("bad"), new FakeAdapter("one", Result(true))).ExecuteAsync(Request(), plan, Options());
+        Assert.Equal(SourceExecutionStatus.Failed, result.Sources[0].Status);
+        Assert.Equal(SourceExecutionStatus.Succeeded, result.Sources[1].Status);
+    }
+
+    [Fact]
     public async Task Unapplied_mandatory_criterion_rejects_all_candidates_and_consumes_attempt()
     {
         var gate = new FakeGate(); var adapter = new FakeAdapter("one", Result(false));
@@ -93,6 +114,10 @@ public sealed class DiscoveryOrchestratorTests
     { private readonly Dictionary<SourceId, IOpportunitySourceAdapter> _items = adapters.ToDictionary(x => x.SourceId); public IOpportunitySourceAdapter? Find(SourceId id) => _items.GetValueOrDefault(id); }
     private sealed class FakeAdapter(string id, SourceSearchResult result) : IOpportunitySourceAdapter
     { public SourceId SourceId { get; } = new(id); public int Calls { get; private set; } public Task<SourceSearchResult> SearchAsync(SourceExecutionTarget target, CancellationToken ct) { Calls++; return Task.FromResult(result); } }
+    private sealed class ThrowingAdapter(string id) : IOpportunitySourceAdapter
+    { public SourceId SourceId { get; } = new(id); public Task<SourceSearchResult> SearchAsync(SourceExecutionTarget target, CancellationToken ct) => throw new InvalidOperationException(); }
+    private sealed class RecordingAdapter(string id) : IOpportunitySourceAdapter
+    { public SourceId SourceId { get; } = new(id); public List<CountryCode> Markets { get; } = []; public Task<SourceSearchResult> SearchAsync(SourceExecutionTarget target, CancellationToken ct) { Markets.Add(target.Market); return Task.FromResult(Result(true)); } }
     private sealed class FakeGate(SourceExecutionAuthorization? result = null, Action? afterReserve = null) : ISourceExecutionGate
     { public int Calls { get; private set; } public FakePermit Permit { get; } = new(new SourceId("one")); public Task<SourceExecutionAuthorization> AuthorizeAndReserveAsync(SourceExecutionTarget target, CancellationToken ct) { Calls++; afterReserve?.Invoke(); return Task.FromResult(result ?? new SourceExecutionAuthorization.Granted(Permit)); } }
     private sealed class FakePermit(SourceId source) : SourceExecutionPermit
