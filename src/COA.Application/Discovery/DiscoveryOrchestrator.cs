@@ -14,7 +14,9 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
 
         var targets = plan.EligibleSources.SelectMany(source => source.SelectedMarkets.Select(market => (source, market)))
             .OrderBy(item => item.source.SourceId.Value, StringComparer.Ordinal).ThenBy(item => item.market.Value, StringComparer.Ordinal).ToArray();
-        using var limiter = new SemaphoreSlim(options.MaxConcurrentSourceExecutions);
+        // A timed-out adapter can still be active. The limiter is deliberately not disposed here:
+        // late-operation observers retain it until their slot has been released.
+        var limiter = new SemaphoreSlim(options.MaxConcurrentSourceExecutions);
         var tasks = targets.Select(item => ExecuteOneAsync(request, item.source, item.market, options, limiter, cancellationToken)).ToArray();
         var outcomes = await Task.WhenAll(tasks);
         return new DiscoveryOutcome(outcomes.OrderBy(outcome => outcome.SourceId.Value, StringComparer.Ordinal).ThenBy(outcome => outcome.Market.Value, StringComparer.Ordinal).ToArray());
@@ -63,8 +65,7 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
                     if (completed != searchTask)
                     {
                         releaseSlot = false;
-                        _ = searchTask.ContinueWith(_ => limiter.Release(), CancellationToken.None,
-                            TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                        _ = ObserveLateOperationAsync(searchTask, limiter);
                         return Outcome(source.SourceId, market, SourceExecutionStatus.TimedOut, "TimedOut");
                     }
                     result = await searchTask;
@@ -79,12 +80,8 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
             }
             finally
             {
-                try
-                {
-                    if (started) await permit.ConsumeAsync(CancellationToken.None);
-                    else if (!released) await permit.ReleaseAsync(CancellationToken.None);
-                }
-                catch when (!callerToken.IsCancellationRequested) { }
+                if (started) await permit.ConsumeAsync(CancellationToken.None);
+                else if (!released) await permit.ReleaseAsync(CancellationToken.None);
             }
         }
         catch (OperationCanceledException) when (callerToken.IsCancellationRequested) { throw; }
@@ -111,4 +108,10 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
         source.Criteria.All(planned => planned.IsMandatory ? request.MandatoryCriteria.Contains(planned.Criterion) : request.PreferredCriteria.Contains(planned.Criterion)));
     private static SourceExecutionOutcome Outcome(SourceId source, CountryCode market, SourceExecutionStatus status, string code) =>
         new(source, market, status, [], [new SourceExecutionDiagnostic(source, market, code)]);
+    private static async Task ObserveLateOperationAsync(Task operation, SemaphoreSlim limiter)
+    {
+        try { await operation.ConfigureAwait(false); }
+        catch { /* observed: outcome has already been reported as TimedOut */ }
+        finally { limiter.Release(); }
+    }
 }

@@ -41,6 +41,8 @@ public interface ISourceExecutionGate
 public interface IOpportunitySourceAdapter
 {
     SourceId SourceId { get; }
+    // Implementations must return promptly and perform I/O asynchronously. A synchronous block
+    // before returning Task cannot be bounded by the orchestrator timeout.
     Task<SourceSearchResult> SearchAsync(SourceExecutionTarget target, CancellationToken cancellationToken);
 }
 
