@@ -33,6 +33,35 @@ internal sealed class ProfileOwnerConfiguration : IEntityTypeConfiguration<Profi
     }
 }
 
+internal sealed class JobSearchProfileConfiguration : IEntityTypeConfiguration<JobSearchProfileEntity>
+{
+    public void Configure(EntityTypeBuilder<JobSearchProfileEntity> builder)
+    {
+        builder.ToTable("JobSearchProfiles");
+        builder.HasKey(profile => profile.JobSearchProfileId).HasName("PK_JobSearchProfiles");
+        builder.Property(profile => profile.Name).HasMaxLength(120).IsRequired();
+        builder.Property(profile => profile.RemoteFromCountry).HasMaxLength(2).IsFixedLength();
+        builder.Property(profile => profile.MinimumSalary).HasPrecision(18, 2);
+        builder.Property(profile => profile.MaximumSalary).HasPrecision(18, 2);
+        builder.Property(profile => profile.SalaryCurrency).HasMaxLength(3).IsFixedLength();
+        builder.Property(profile => profile.RowVersion).IsRowVersion();
+        builder.Property(profile => profile.CreatedAtUtc).HasColumnType("datetime2(7)");
+        builder.Property(profile => profile.UpdatedAtUtc).HasColumnType("datetime2(7)");
+        builder.HasIndex(profile => new { profile.OwnerId, profile.IsActive });
+        builder.HasOne(profile => profile.Owner).WithMany(owner => owner.JobSearchProfiles).HasForeignKey(profile => profile.OwnerId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+internal sealed class JobSearchProfileValueConfiguration : IEntityTypeConfiguration<JobSearchProfileValueEntity>
+{
+    public void Configure(EntityTypeBuilder<JobSearchProfileValueEntity> builder)
+    {
+        builder.ToTable("JobSearchProfileValues");
+        builder.HasKey(value => new { value.JobSearchProfileId, value.Kind, value.Value }).HasName("PK_JobSearchProfileValues");
+        builder.Property(value => value.Value).HasMaxLength(200).UseCollation("Latin1_General_100_CI_AS");
+        builder.HasOne(value => value.Profile).WithMany(profile => profile.Values).HasForeignKey(value => value.JobSearchProfileId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 internal sealed class ProfileConfiguration : IEntityTypeConfiguration<ProfileEntity>
 {
     public void Configure(EntityTypeBuilder<ProfileEntity> builder)

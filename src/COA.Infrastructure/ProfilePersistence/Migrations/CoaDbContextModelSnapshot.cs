@@ -63,6 +63,86 @@ namespace COA.Infrastructure.ProfilePersistence.Migrations
                     b.ToTable("Opportunities", (string)null);
                 });
 
+            modelBuilder.Entity("COA.Infrastructure.ProfilePersistence.JobSearchProfileEntity", b =>
+                {
+                    b.Property<Guid>("JobSearchProfileId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal?>("MaximumSalary")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("MinimumSalary")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("RemoteFromCountry")
+                        .HasMaxLength(2)
+                        .HasColumnType("nchar(2)")
+                        .IsFixedLength();
+
+                    b.Property<byte[]>("RowVersion")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("rowversion");
+
+                    b.Property<string>("SalaryCurrency")
+                        .HasMaxLength(3)
+                        .HasColumnType("nchar(3)")
+                        .IsFixedLength();
+
+                    b.Property<byte?>("SalaryPeriod")
+                        .HasColumnType("tinyint");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2(7)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("JobSearchProfileId")
+                        .HasName("PK_JobSearchProfiles");
+
+                    b.HasIndex("OwnerId", "IsActive");
+
+                    b.ToTable("JobSearchProfiles", (string)null);
+                });
+
+            modelBuilder.Entity("COA.Infrastructure.ProfilePersistence.JobSearchProfileValueEntity", b =>
+                {
+                    b.Property<Guid>("JobSearchProfileId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Value")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)")
+                        .UseCollation("Latin1_General_100_CI_AS");
+
+                    b.HasKey("JobSearchProfileId", "Kind", "Value")
+                        .HasName("PK_JobSearchProfileValues");
+
+                    b.ToTable("JobSearchProfileValues", (string)null);
+                });
+
             modelBuilder.Entity("COA.Infrastructure.ProfilePersistence.ProfileEntity", b =>
                 {
                     b.Property<Guid>("ProfileId")
@@ -225,6 +305,28 @@ namespace COA.Infrastructure.ProfilePersistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("COA.Infrastructure.ProfilePersistence.JobSearchProfileEntity", b =>
+                {
+                    b.HasOne("COA.Infrastructure.ProfilePersistence.ProfileOwnerEntity", "Owner")
+                        .WithMany("JobSearchProfiles")
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("COA.Infrastructure.ProfilePersistence.JobSearchProfileValueEntity", b =>
+                {
+                    b.HasOne("COA.Infrastructure.ProfilePersistence.JobSearchProfileEntity", "Profile")
+                        .WithMany("Values")
+                        .HasForeignKey("JobSearchProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Profile");
+                });
+
             modelBuilder.Entity("COA.Infrastructure.ProfilePersistence.ProfileEntity", b =>
                 {
                     b.HasOne("COA.Infrastructure.ProfilePersistence.ProfileOwnerEntity", "Owner")
@@ -261,6 +363,11 @@ namespace COA.Infrastructure.ProfilePersistence.Migrations
                     b.Navigation("Profile");
                 });
 
+            modelBuilder.Entity("COA.Infrastructure.ProfilePersistence.JobSearchProfileEntity", b =>
+                {
+                    b.Navigation("Values");
+                });
+
             modelBuilder.Entity("COA.Infrastructure.ProfilePersistence.ProfileEntity", b =>
                 {
                     b.Navigation("Versions");
@@ -268,6 +375,8 @@ namespace COA.Infrastructure.ProfilePersistence.Migrations
 
             modelBuilder.Entity("COA.Infrastructure.ProfilePersistence.ProfileOwnerEntity", b =>
                 {
+                    b.Navigation("JobSearchProfiles");
+
                     b.Navigation("Profile");
                 });
 

@@ -3,11 +3,14 @@ using System.Text.Json.Serialization;
 using COA.Api.Authentication;
 using COA.Api.Profile;
 using COA.Api.Opportunity;
+using COA.Api.SearchProfiles;
 using COA.Application.Matching;
 using COA.Application.Profile;
 using COA.Application.Opportunity;
+using COA.Application.SearchProfiles;
 using COA.Infrastructure.ProfilePersistence;
 using COA.Infrastructure.OpportunityPersistence;
+using COA.Infrastructure.SearchProfilePersistence;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -34,6 +37,8 @@ builder.Services.AddScoped<IProfileStore, SqlServerProfileStore>();
 builder.Services.AddScoped<ProfileUseCases>();
 builder.Services.AddScoped<IOpportunityStore, SqlServerOpportunityStore>();
 builder.Services.AddScoped<OpportunityUseCases>();
+builder.Services.AddScoped<IJobSearchProfileStore, SqlServerJobSearchProfileStore>();
+builder.Services.AddScoped<JobSearchProfileUseCases>();
 builder.Services.AddApiJwtBearerAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization();
 
@@ -60,6 +65,36 @@ app.MapGet("/api/me", (HttpContext context) =>
 
 var profile = app.MapGroup("/api/profile").RequireAuthorization();
 var opportunities = app.MapGroup("/api/opportunities").RequireAuthorization();
+var searchProfiles = app.MapGroup("/api/search-profiles").RequireAuthorization();
+searchProfiles.MapPost("", async (HttpContext context, JobSearchProfileUseCases useCases, CancellationToken ct) =>
+{
+    if (!AuthenticatedOwner.TryCreateOwnerIdentity(context.User, out var owner)) return ForbiddenProblem();
+    var (request, error) = await ReadRequestAsync<JobSearchProfileHttpRequest>(context.Request, ct); if (error is not null) return error;
+    try { var profile = await useCases.CreateAsync(owner, request!.ToCreate(), ct); return Results.Created($"/api/search-profiles/{profile.Id}", JobSearchProfileHttpResponse.FromDomain(profile)); }
+    catch (Exception exception) when (exception is ArgumentException or OverflowException) { return BadRequestProblem(); }
+});
+searchProfiles.MapGet("", async (HttpContext context, JobSearchProfileUseCases useCases, CancellationToken ct) =>
+{ if (!AuthenticatedOwner.TryCreateOwnerIdentity(context.User, out var owner)) return ForbiddenProblem(); return Results.Ok((await useCases.ListAsync(owner, ct)).Select(JobSearchProfileHttpResponse.FromDomain)); });
+searchProfiles.MapGet("/{id:guid}", async (HttpContext context, Guid id, JobSearchProfileUseCases useCases, CancellationToken ct) =>
+{ if (!AuthenticatedOwner.TryCreateOwnerIdentity(context.User, out var owner)) return ForbiddenProblem(); var profile = await useCases.GetAsync(owner, id, ct); return profile is null ? NotFoundProblem() : Results.Ok(JobSearchProfileHttpResponse.FromDomain(profile)); });
+searchProfiles.MapPut("/{id:guid}", async (HttpContext context, Guid id, JobSearchProfileUseCases useCases, CancellationToken ct) =>
+{
+    if (!AuthenticatedOwner.TryCreateOwnerIdentity(context.User, out var owner)) return ForbiddenProblem(); var (request, error) = await ReadRequestAsync<JobSearchProfileHttpRequest>(context.Request, ct); if (error is not null) return error;
+    try { var result = await useCases.UpdateAsync(owner, id, request!.ToUpdate(), ct); return result switch { SearchProfileMutationResult.Changed changed => Results.Ok(JobSearchProfileHttpResponse.FromDomain(changed.Profile)), SearchProfileMutationResult.NotFound => NotFoundProblem(), SearchProfileMutationResult.Conflict => ConflictProblem(), _ => UnexpectedResult() }; }
+    catch (Exception exception) when (exception is ArgumentException or OverflowException) { return BadRequestProblem(); }
+});
+searchProfiles.MapPatch("/{id:guid}/activation", async (HttpContext context, Guid id, JobSearchProfileUseCases useCases, CancellationToken ct) =>
+{
+    if (!AuthenticatedOwner.TryCreateOwnerIdentity(context.User, out var owner)) return ForbiddenProblem(); var (request, error) = await ReadRequestAsync<JobSearchProfileActivationHttpRequest>(context.Request, ct); if (error is not null) return error;
+    try { var result = await useCases.SetActiveAsync(owner, id, request!.ExpectedVersion, request.IsActive, ct); return result switch { SearchProfileMutationResult.Changed changed => Results.Ok(JobSearchProfileHttpResponse.FromDomain(changed.Profile)), SearchProfileMutationResult.NotFound => NotFoundProblem(), SearchProfileMutationResult.Conflict => ConflictProblem(), _ => UnexpectedResult() }; }
+    catch (Exception exception) when (exception is ArgumentException or OverflowException) { return BadRequestProblem(); }
+});
+searchProfiles.MapDelete("/{id:guid}", async (HttpContext context, Guid id, int expectedVersion, JobSearchProfileUseCases useCases, CancellationToken ct) =>
+{
+    if (!AuthenticatedOwner.TryCreateOwnerIdentity(context.User, out var owner)) return ForbiddenProblem();
+    try { var result = await useCases.DeleteAsync(owner, id, expectedVersion, ct); return result switch { SearchProfileMutationResult.Deleted => Results.NoContent(), SearchProfileMutationResult.NotFound => NotFoundProblem(), SearchProfileMutationResult.Conflict => ConflictProblem(), _ => UnexpectedResult() }; }
+    catch (ArgumentOutOfRangeException) { return BadRequestProblem(); }
+});
 opportunities.MapPost("", async (HttpContext context, OpportunityUseCases useCases, OpportunityImportRequest request, CancellationToken ct) =>
 {
     if (!AuthenticatedOwner.TryCreateOwnerIdentity(context.User, out var owner)) return ForbiddenProblem();
