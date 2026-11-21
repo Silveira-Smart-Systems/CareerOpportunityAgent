@@ -10,6 +10,8 @@ public sealed class CoaDbContext(DbContextOptions<CoaDbContext> options) : DbCon
     internal DbSet<ProfileVersionEntity> ProfileVersions => Set<ProfileVersionEntity>();
     internal DbSet<ProfileEvidenceEntity> ProfileEvidence => Set<ProfileEvidenceEntity>();
     internal DbSet<OpportunityEntity> Opportunities => Set<OpportunityEntity>();
+    internal DbSet<JobSearchProfileEntity> JobSearchProfiles => Set<JobSearchProfileEntity>();
+    internal DbSet<JobSearchProfileValueEntity> JobSearchProfileValues => Set<JobSearchProfileValueEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
