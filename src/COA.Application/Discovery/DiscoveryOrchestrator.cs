@@ -10,6 +10,7 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
         ArgumentNullException.ThrowIfNull(request); ArgumentNullException.ThrowIfNull(plan); ArgumentNullException.ThrowIfNull(options);
         options.Validate(); request.Validate();
         if (!plan.Matches(request)) throw new ArgumentException("The discovery plan does not match the search request.", nameof(plan));
+        if (!PlanIsValid(request, plan)) throw new ArgumentException("The discovery plan is not executable for the search request.", nameof(plan));
 
         var targets = plan.EligibleSources.SelectMany(source => source.SelectedMarkets.Select(market => (source, market)))
             .OrderBy(item => item.source.SourceId.Value, StringComparer.Ordinal).ThenBy(item => item.market.Value, StringComparer.Ordinal).ToArray();
@@ -48,13 +49,20 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
                 using var timeout = new CancellationTokenSource(options.SourceTimeout, _timeProvider);
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(callerToken, timeout.Token);
                 SourceSearchResult result;
-                try { result = await adapter.SearchAsync(target, linked.Token); }
+                var searchTask = adapter.SearchAsync(target, linked.Token);
+                try
+                {
+                    var completed = await Task.WhenAny(searchTask, Task.Delay(options.SourceTimeout, _timeProvider, callerToken));
+                    callerToken.ThrowIfCancellationRequested();
+                    if (completed != searchTask) return Outcome(source.SourceId, market, SourceExecutionStatus.TimedOut, "TimedOut");
+                    result = await searchTask;
+                }
                 catch (OperationCanceledException) when (callerToken.IsCancellationRequested) { throw; }
                 catch (OperationCanceledException) when (timeout.IsCancellationRequested) { return Outcome(source.SourceId, market, SourceExecutionStatus.TimedOut, "TimedOut"); }
                 catch (OperationCanceledException) { return Outcome(source.SourceId, market, SourceExecutionStatus.AdapterCancelled, "AdapterCancelled"); }
                 catch { return Outcome(source.SourceId, market, SourceExecutionStatus.Failed, "AdapterFailed"); }
 
-                if (!MandatoryCriteriaApplied(source, result)) return Outcome(source.SourceId, market, SourceExecutionStatus.InvalidPlan, "MandatoryCriterionUnapplied");
+                if (!ResultIsValid(source, market, adapter, result)) return Outcome(source.SourceId, market, SourceExecutionStatus.InvalidPlan, "AdapterResultInvalid");
                 return new SourceExecutionOutcome(source.SourceId, market, SourceExecutionStatus.Succeeded, result.Candidates, []);
             }
             finally
@@ -70,6 +78,19 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
         .All(c => c.Disposition is CriterionDisposition.AppliedByProvider or CriterionDisposition.AppliedPostFetch);
     private static bool MandatoryCriteriaApplied(PlannedSource source, SourceSearchResult result) => source.Criteria.Where(c => c.IsMandatory).All(required =>
         result.AppliedCriteria.Any(applied => applied.Criterion == required.Criterion && (required.Disposition == CriterionDisposition.AppliedByProvider ? applied.Application == CriterionApplication.AppliedByProvider : applied.Application == CriterionApplication.AppliedPostFetch)));
+    private static bool ResultIsValid(PlannedSource source, CountryCode market, IOpportunitySourceAdapter adapter, SourceSearchResult result) =>
+        adapter.SourceId == source.SourceId && result is not null &&
+        result.Candidates.All(candidate => candidate.Provenance.SourceId == source.SourceId && candidate.Provenance.RequestedMarket == market) &&
+        result.AppliedCriteria.GroupBy(criterion => criterion.Criterion).All(group => group.Count() == 1) &&
+        result.AppliedCriteria.All(applied => source.Criteria.Any(planned => planned.Criterion == applied.Criterion)) &&
+        MandatoryCriteriaApplied(source, result);
+    private static bool PlanIsValid(SearchRequest request, DiscoveryPlan plan) => plan.Sources.All(source =>
+        source.SelectedMarkets.IsSubsetOf(request.SourceMarkets) &&
+        source.Criteria.GroupBy(criterion => criterion.Criterion).All(group => group.Count() == 1) &&
+        request.MandatoryCriteria.All(criterion => source.Criteria.Any(planned => planned.Criterion == criterion && planned.IsMandatory &&
+            planned.Disposition is CriterionDisposition.AppliedByProvider or CriterionDisposition.AppliedPostFetch)) &&
+        request.PreferredCriteria.All(criterion => source.Criteria.Any(planned => planned.Criterion == criterion && !planned.IsMandatory)) &&
+        source.Criteria.All(planned => planned.IsMandatory ? request.MandatoryCriteria.Contains(planned.Criterion) : request.PreferredCriteria.Contains(planned.Criterion)));
     private static SourceExecutionOutcome Outcome(SourceId source, CountryCode market, SourceExecutionStatus status, string code) =>
         new(source, market, status, [], [new SourceExecutionDiagnostic(source, market, code)]);
 }

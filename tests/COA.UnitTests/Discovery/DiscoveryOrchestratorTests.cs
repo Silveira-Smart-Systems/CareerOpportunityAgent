@@ -45,6 +45,23 @@ public sealed class DiscoveryOrchestratorTests
     }
 
     [Fact]
+    public async Task Manipulated_market_or_missing_mandatory_criterion_fails_closed_before_gate()
+    {
+        var gate = new FakeGate();
+        var invalid = new PlannedSource(new SourceId("one"), [new CountryCode("PT")], true, [SourcePlanReason.Eligible], []);
+        await Assert.ThrowsAsync<ArgumentException>(() => Create(gate, new FakeAdapter("one", Result(true))).ExecuteAsync(Request(), new DiscoveryPlan(Request(), [invalid]), Options()));
+        Assert.Equal(0, gate.Calls);
+    }
+
+    [Fact]
+    public async Task Wrong_provenance_rejects_candidates()
+    {
+        var wrong = new SourceSearchResult([new SourceOpportunityCandidate(new SourceProvenance(new SourceId("other"), "1", new Uri("https://example.test/1"), Gb, DateTimeOffset.UnixEpoch), new Dictionary<string, SourceObservedValue>())], [new AppliedCriterion(SearchCriterion.TargetRole, CriterionApplication.AppliedByProvider)]);
+        var outcome = await Create(new FakeGate(), new FakeAdapter("one", wrong)).ExecuteAsync(Request(), new DiscoveryPlan(Request(), [Source("one", true)]), Options());
+        Assert.Equal(SourceExecutionStatus.InvalidPlan, Assert.Single(outcome.Sources).Status); Assert.Empty(outcome.Candidates);
+    }
+
+    [Fact]
     public async Task Unapplied_mandatory_criterion_rejects_all_candidates_and_consumes_attempt()
     {
         var gate = new FakeGate(); var adapter = new FakeAdapter("one", Result(false));
