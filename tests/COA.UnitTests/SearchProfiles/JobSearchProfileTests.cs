@@ -17,6 +17,8 @@ public sealed class JobSearchProfileTests
     [Fact]
     public void Overlapping_criteria_are_rejected() => Assert.Throws<ArgumentException>(() => JobSearchProfile.Create(Guid.NewGuid(), "Profile", Preferences(mandatory: [SearchProfileCriterion.Skill], preferred: [SearchProfileCriterion.Skill]), DateTime.UtcNow));
     [Fact]
+    public void Invalid_work_mode_is_rejected() => Assert.Throws<ArgumentException>(() => JobSearchProfile.Create(Guid.NewGuid(), "Profile", new JobSearchProfilePreferences(["Technology"], ["Architect"], [(SearchWorkMode)99], ["PT"], null, [], null, [], [], [], [], []), DateTime.UtcNow));
+    [Fact]
     public void Non_technology_roles_follow_the_same_rules()
     {
         var profile = JobSearchProfile.Create(Guid.NewGuid(), "Clinical", Preferences(categories: ["Healthcare"], roles: ["Registered Nurse"], markets: ["BR"]), DateTime.UtcNow);

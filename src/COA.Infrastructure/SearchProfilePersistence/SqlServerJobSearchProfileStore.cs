@@ -38,14 +38,17 @@ public sealed class SqlServerJobSearchProfileStore(IDbContextFactory<CoaDbContex
         var entity = await FindAsync(db, owner, id, false, ct);
         return entity is null ? null : ToDomain(entity);
     }
-    public async Task<SearchProfileMutationResult> UpdateAsync(OwnerIdentity owner, int expectedVersion, JobSearchProfile profile, CancellationToken ct = default)
+    public async Task<SearchProfileMutationResult> UpdateAsync(OwnerIdentity owner, Guid id, int expectedVersion, Func<JobSearchProfile, JobSearchProfile> mutate, CancellationToken ct = default)
     {
         if (expectedVersion < 1) throw new ArgumentOutOfRangeException(nameof(expectedVersion));
+        ArgumentNullException.ThrowIfNull(mutate);
         await using var db = await _contextFactory.CreateDbContextAsync(ct);
-        var entity = await FindAsync(db, owner, profile.Id, true, ct);
+        var entity = await FindAsync(db, owner, id, true, ct);
         if (entity is null) return new SearchProfileMutationResult.NotFound();
         if (entity.Version != expectedVersion) return new SearchProfileMutationResult.Conflict();
-        Apply(profile, entity);
+        var profile = mutate(ToDomain(entity));
+        if (profile.Id != id || profile.Version != checked(expectedVersion + 1)) throw new ArgumentException("Search profile mutation is invalid.", nameof(mutate));
+        Apply(db, profile, entity);
         try { await db.SaveChangesAsync(ct); return new SearchProfileMutationResult.Changed(profile); }
         catch (DbUpdateConcurrencyException) { return new SearchProfileMutationResult.Conflict(); }
     }
@@ -77,21 +80,33 @@ public sealed class SqlServerJobSearchProfileStore(IDbContextFactory<CoaDbContex
     private static JobSearchProfileEntity ToEntity(JobSearchProfile profile, Guid ownerId)
     {
         var entity = new JobSearchProfileEntity { JobSearchProfileId = profile.Id, OwnerId = ownerId };
-        Apply(profile, entity); return entity;
+        Apply(null, profile, entity); return entity;
     }
-    private static void Apply(JobSearchProfile profile, JobSearchProfileEntity entity)
+    private static void Apply(CoaDbContext? db, JobSearchProfile profile, JobSearchProfileEntity entity)
     {
         entity.Version = profile.Version; entity.Name = profile.Name; entity.IsActive = profile.IsActive; entity.CreatedAtUtc = profile.CreatedAtUtc; entity.UpdatedAtUtc = profile.UpdatedAtUtc;
         entity.RemoteFromCountry = profile.Preferences.RemoteFromCountry;
         entity.MinimumSalary = profile.Preferences.Salary?.Minimum; entity.MaximumSalary = profile.Preferences.Salary?.Maximum;
         entity.SalaryCurrency = profile.Preferences.Salary?.Currency?.ToUpperInvariant(); entity.SalaryPeriod = profile.Preferences.Salary?.Period is { } period ? (byte)period : null;
-        entity.Values.Clear();
-        Add(entity, JobSearchProfileValueKind.Category, profile.Preferences.Categories); Add(entity, JobSearchProfileValueKind.TargetRole, profile.Preferences.TargetRoles);
-        Add(entity, JobSearchProfileValueKind.WorkMode, profile.Preferences.WorkModes.Select(value => value.ToString())); Add(entity, JobSearchProfileValueKind.SourceMarket, profile.Preferences.SourceMarkets);
-        Add(entity, JobSearchProfileValueKind.EmploymentType, profile.Preferences.EmploymentTypes); Add(entity, JobSearchProfileValueKind.Language, profile.Preferences.Languages); Add(entity, JobSearchProfileValueKind.Skill, profile.Preferences.Skills); Add(entity, JobSearchProfileValueKind.ExcludedKeyword, profile.Preferences.ExcludedKeywords);
-        Add(entity, JobSearchProfileValueKind.MandatoryCriterion, profile.Preferences.MandatoryCriteria.Select(value => value.ToString())); Add(entity, JobSearchProfileValueKind.PreferredCriterion, profile.Preferences.PreferredCriteria.Select(value => value.ToString()));
+        var desired = Values(profile).ToHashSet();
+        var obsolete = entity.Values.Where(value => !desired.Contains((value.Kind, value.Value))).ToArray();
+        foreach (var value in obsolete) { entity.Values.Remove(value); db?.JobSearchProfileValues.Remove(value); }
+        var existing = entity.Values.Select(value => (value.Kind, value.Value)).ToHashSet();
+        foreach (var (kind, value) in desired.Where(value => !existing.Contains(value))) entity.Values.Add(new JobSearchProfileValueEntity { JobSearchProfileId = entity.JobSearchProfileId, Kind = kind, Value = value });
     }
-    private static void Add(JobSearchProfileEntity entity, JobSearchProfileValueKind kind, IEnumerable<string> values) => entity.Values.AddRange(values.Select(value => new JobSearchProfileValueEntity { JobSearchProfileId = entity.JobSearchProfileId, Kind = kind, Value = value }));
+    private static IEnumerable<(JobSearchProfileValueKind Kind, string Value)> Values(JobSearchProfile profile)
+    {
+        foreach (var value in profile.Preferences.Categories) yield return (JobSearchProfileValueKind.Category, value);
+        foreach (var value in profile.Preferences.TargetRoles) yield return (JobSearchProfileValueKind.TargetRole, value);
+        foreach (var value in profile.Preferences.WorkModes) yield return (JobSearchProfileValueKind.WorkMode, value.ToString());
+        foreach (var value in profile.Preferences.SourceMarkets) yield return (JobSearchProfileValueKind.SourceMarket, value);
+        foreach (var value in profile.Preferences.EmploymentTypes) yield return (JobSearchProfileValueKind.EmploymentType, value);
+        foreach (var value in profile.Preferences.Languages) yield return (JobSearchProfileValueKind.Language, value);
+        foreach (var value in profile.Preferences.Skills) yield return (JobSearchProfileValueKind.Skill, value);
+        foreach (var value in profile.Preferences.ExcludedKeywords) yield return (JobSearchProfileValueKind.ExcludedKeyword, value);
+        foreach (var value in profile.Preferences.MandatoryCriteria) yield return (JobSearchProfileValueKind.MandatoryCriterion, value.ToString());
+        foreach (var value in profile.Preferences.PreferredCriteria) yield return (JobSearchProfileValueKind.PreferredCriterion, value.ToString());
+    }
     private static JobSearchProfile ToDomain(JobSearchProfileEntity entity)
     {
         IReadOnlyList<string> Values(JobSearchProfileValueKind kind) => entity.Values.Where(value => value.Kind == kind).Select(value => value.Value).ToArray();

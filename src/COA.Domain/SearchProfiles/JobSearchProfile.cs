@@ -81,8 +81,12 @@ public sealed record JobSearchProfilePreferences(
         return normalized;
     }
 
-    private static IReadOnlyList<SearchWorkMode> NormalizeModes(IReadOnlyList<SearchWorkMode>? values) =>
-        (values ?? throw new ArgumentNullException(nameof(WorkModes))).Distinct().OrderBy(value => value).ToArray();
+    private static IReadOnlyList<SearchWorkMode> NormalizeModes(IReadOnlyList<SearchWorkMode>? values)
+    {
+        var result = (values ?? throw new ArgumentNullException(nameof(WorkModes))).Distinct().OrderBy(value => value).ToArray();
+        if (result.Any(value => !Enum.IsDefined(value))) throw new ArgumentException("Search work mode is invalid.", nameof(WorkModes));
+        return result;
+    }
     private static IReadOnlyList<SearchProfileCriterion> NormalizeCriteria(IReadOnlyList<SearchProfileCriterion>? values, string name)
     {
         var result = (values ?? throw new ArgumentNullException(name)).Distinct().OrderBy(value => value).ToArray();

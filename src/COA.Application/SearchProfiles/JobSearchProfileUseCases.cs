@@ -11,10 +11,10 @@ public sealed class JobSearchProfileUseCases(IJobSearchProfileStore store, TimeP
         _store.CreateAsync(owner, JobSearchProfile.Create(Guid.NewGuid(), request.Name, request.Preferences, UtcNow()), ct);
     public Task<IReadOnlyList<JobSearchProfile>> ListAsync(OwnerIdentity owner, CancellationToken ct = default) => _store.ListAsync(owner, ct);
     public Task<JobSearchProfile?> GetAsync(OwnerIdentity owner, Guid id, CancellationToken ct = default) => _store.GetAsync(owner, id, ct);
-    public async Task<SearchProfileMutationResult> UpdateAsync(OwnerIdentity owner, Guid id, UpdateJobSearchProfileRequest request, CancellationToken ct = default)
-    { var current = await _store.GetAsync(owner, id, ct); return current is null ? new SearchProfileMutationResult.NotFound() : await _store.UpdateAsync(owner, request.ExpectedVersion, current.Revise(request.Name, request.Preferences, UtcNow()), ct); }
-    public async Task<SearchProfileMutationResult> SetActiveAsync(OwnerIdentity owner, Guid id, int expectedVersion, bool isActive, CancellationToken ct = default)
-    { var current = await _store.GetAsync(owner, id, ct); return current is null ? new SearchProfileMutationResult.NotFound() : await _store.UpdateAsync(owner, expectedVersion, current.SetActive(isActive, UtcNow()), ct); }
+    public Task<SearchProfileMutationResult> UpdateAsync(OwnerIdentity owner, Guid id, UpdateJobSearchProfileRequest request, CancellationToken ct = default) =>
+        _store.UpdateAsync(owner, id, request.ExpectedVersion, current => current.Revise(request.Name, request.Preferences, UtcNow()), ct);
+    public Task<SearchProfileMutationResult> SetActiveAsync(OwnerIdentity owner, Guid id, int expectedVersion, bool isActive, CancellationToken ct = default) =>
+        _store.UpdateAsync(owner, id, expectedVersion, current => current.SetActive(isActive, UtcNow()), ct);
     public Task<SearchProfileMutationResult> DeleteAsync(OwnerIdentity owner, Guid id, int expectedVersion, CancellationToken ct = default) => _store.DeleteAsync(owner, expectedVersion, id, ct);
     private DateTime UtcNow() => _timeProvider.GetUtcNow().UtcDateTime;
 }
