@@ -56,6 +56,60 @@ public sealed class DiscoveryOrchestratorTests
     }
 
     [Fact]
+    public async Task Forged_ineligible_plan_missing_a_preferred_criterion_fails_closed_before_gate()
+    {
+        var request = new SearchRequest([Gb], ["Technology"], ["Architect"], ["Remote"], null,
+            [SearchCriterion.TargetRole], [SearchCriterion.WorkMode]);
+        var source = new PlannedSource(new SourceId("one"), [Gb], false, [SourcePlanReason.MandatoryCriterionUnsupported],
+            [new PlannedCriterion(SearchCriterion.TargetRole, true, CriterionDisposition.Unsupported)]);
+        var gate = new FakeGate();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => Create(gate).ExecuteAsync(request, new DiscoveryPlan(request, [source]), Options()));
+
+        Assert.Equal(0, gate.Calls);
+    }
+
+    [Fact]
+    public async Task Forged_ineligible_plan_with_wrong_mandatory_classification_fails_closed_before_gate()
+    {
+        var request = new SearchRequest([Gb], ["Technology"], ["Architect"], ["Remote"], null, [SearchCriterion.TargetRole], []);
+        var source = new PlannedSource(new SourceId("one"), [Gb], false, [SourcePlanReason.MandatoryCriterionUnsupported],
+            [new PlannedCriterion(SearchCriterion.TargetRole, false, CriterionDisposition.Unsupported)]);
+        var gate = new FakeGate();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => Create(gate).ExecuteAsync(request, new DiscoveryPlan(request, [source]), Options()));
+
+        Assert.Equal(0, gate.Calls);
+    }
+
+    [Fact]
+    public async Task Forged_eligible_plan_with_an_unexecutable_mandatory_criterion_fails_closed_before_gate()
+    {
+        var request = new SearchRequest([Gb], ["Technology"], ["Architect"], ["Remote"], null, [SearchCriterion.TargetRole], []);
+        var source = new PlannedSource(new SourceId("one"), [Gb], true, [SourcePlanReason.Eligible],
+            [new PlannedCriterion(SearchCriterion.TargetRole, true, CriterionDisposition.UnknownSemantics)]);
+        var gate = new FakeGate();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => Create(gate).ExecuteAsync(request, new DiscoveryPlan(request, [source]), Options()));
+
+        Assert.Equal(0, gate.Calls);
+    }
+
+    [Fact]
+    public async Task Forged_plan_with_duplicate_criterion_fails_closed_before_gate()
+    {
+        var request = new SearchRequest([Gb], ["Technology"], ["Architect"], ["Remote"], null, [SearchCriterion.TargetRole], []);
+        var source = new PlannedSource(new SourceId("one"), [Gb], false, [SourcePlanReason.MandatoryCriterionUnsupported],
+            [new PlannedCriterion(SearchCriterion.TargetRole, true, CriterionDisposition.Unsupported),
+                new PlannedCriterion(SearchCriterion.TargetRole, true, CriterionDisposition.UnknownSemantics)]);
+        var gate = new FakeGate();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => Create(gate).ExecuteAsync(request, new DiscoveryPlan(request, [source]), Options()));
+
+        Assert.Equal(0, gate.Calls);
+    }
+
+    [Fact]
     public async Task Wrong_provenance_rejects_candidates()
     {
         var wrong = new SourceSearchResult([new SourceOpportunityCandidate(new SourceProvenance(new SourceId("other"), "1", new Uri("https://example.test/1"), Gb, DateTimeOffset.UnixEpoch), new Dictionary<string, SourceObservedValue>())], [new AppliedCriterion(SearchCriterion.TargetRole, CriterionApplication.AppliedByProvider)]);
