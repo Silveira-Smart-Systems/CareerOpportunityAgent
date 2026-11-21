@@ -1,5 +1,7 @@
 namespace COA.Application.Discovery;
 
+using System.Collections.Concurrent;
+
 public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adapters, ISourceExecutionGate gate, TimeProvider? timeProvider = null)
     : IDiscoveryOrchestrator
 {
@@ -17,13 +19,25 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
         // A timed-out adapter can still be active. The limiter is deliberately not disposed here:
         // late-operation observers retain it until their slot has been released.
         var limiter = new SemaphoreSlim(options.MaxConcurrentSourceExecutions);
-        var tasks = targets.Select(item => ExecuteOneAsync(request, item.source, item.market, options, limiter, cancellationToken)).ToArray();
-        var outcomes = await Task.WhenAll(tasks);
-        return new DiscoveryOutcome(outcomes.OrderBy(outcome => outcome.SourceId.Value, StringComparer.Ordinal).ThenBy(outcome => outcome.Market.Value, StringComparer.Ordinal).ToArray());
+        var lateOperations = new ConcurrentBag<Task>();
+        var finished = false;
+        try
+        {
+            var tasks = targets.Select(item => ExecuteOneAsync(request, item.source, item.market, options, limiter, lateOperations, cancellationToken)).ToArray();
+            var outcomes = await Task.WhenAll(tasks);
+            await Task.WhenAll(lateOperations);
+            finished = true;
+            return new DiscoveryOutcome(outcomes.OrderBy(outcome => outcome.SourceId.Value, StringComparer.Ordinal).ThenBy(outcome => outcome.Market.Value, StringComparer.Ordinal).ToArray());
+        }
+        finally
+        {
+            if (finished || lateOperations.IsEmpty) limiter.Dispose();
+            else _ = DisposeAfterLateOperationsAsync(lateOperations, limiter);
+        }
     }
 
     private async Task<SourceExecutionOutcome> ExecuteOneAsync(SearchRequest request, PlannedSource source, CountryCode market,
-        DiscoveryExecutionOptions options, SemaphoreSlim limiter, CancellationToken callerToken)
+        DiscoveryExecutionOptions options, SemaphoreSlim limiter, ConcurrentBag<Task> lateOperations, CancellationToken callerToken)
     {
         await limiter.WaitAsync(callerToken);
         var releaseSlot = true;
@@ -65,7 +79,7 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
                     if (completed != searchTask)
                     {
                         releaseSlot = false;
-                        _ = ObserveLateOperationAsync(searchTask, limiter);
+                        lateOperations.Add(ObserveLateOperationAsync(searchTask, limiter));
                         return Outcome(source.SourceId, market, SourceExecutionStatus.TimedOut, "TimedOut");
                     }
                     result = await searchTask;
@@ -80,8 +94,15 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
             }
             finally
             {
-                if (started) await permit.ConsumeAsync(CancellationToken.None);
-                else if (!released) await permit.ReleaseAsync(CancellationToken.None);
+                try
+                {
+                    if (started) await permit.ConsumeAsync(CancellationToken.None);
+                    else if (!released) await permit.ReleaseAsync(CancellationToken.None);
+                }
+                catch when (callerToken.IsCancellationRequested)
+                {
+                    // The caller's cancellation must remain the observable result.
+                }
             }
         }
         catch (OperationCanceledException) when (callerToken.IsCancellationRequested) { throw; }
@@ -113,5 +134,10 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
         try { await operation.ConfigureAwait(false); }
         catch { /* observed: outcome has already been reported as TimedOut */ }
         finally { limiter.Release(); }
+    }
+    private static async Task DisposeAfterLateOperationsAsync(ConcurrentBag<Task> operations, SemaphoreSlim limiter)
+    {
+        try { await Task.WhenAll(operations); }
+        finally { limiter.Dispose(); }
     }
 }
