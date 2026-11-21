@@ -15,5 +15,6 @@
     <ProjectReference Include="../../src/COA.Api/COA.Api.csproj" />
     <ProjectReference Include="../../src/COA.Application/COA.Application.csproj" />
     <ProjectReference Include="../../src/COA.Domain/COA.Domain.csproj" />
+    <ProjectReference Include="../../src/COA.Infrastructure/COA.Infrastructure.csproj" />
   </ItemGroup>
 </Project>

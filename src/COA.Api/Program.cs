@@ -11,6 +11,7 @@ using COA.Application.SearchProfiles;
 using COA.Infrastructure.ProfilePersistence;
 using COA.Infrastructure.OpportunityPersistence;
 using COA.Infrastructure.SearchProfilePersistence;
+using COA.Infrastructure.Discovery.Jobicy;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -39,6 +40,8 @@ builder.Services.AddScoped<IOpportunityStore, SqlServerOpportunityStore>();
 builder.Services.AddScoped<OpportunityUseCases>();
 builder.Services.AddScoped<IJobSearchProfileStore, SqlServerJobSearchProfileStore>();
 builder.Services.AddScoped<JobSearchProfileUseCases>();
+// Registers an opt-in adapter only; the default Jobicy option is disabled and no execution is wired here.
+builder.Services.AddExperimentalJobicyDiscovery(builder.Configuration);
 builder.Services.AddApiJwtBearerAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization();
 
