@@ -99,6 +99,25 @@ public sealed class DiscoveryPlannerTests
         Assert.Equal(CriterionDisposition.UnknownSemantics, criterion.Disposition);
     }
 
+    [Fact]
+    public void Preferred_unsupported_filter_is_diagnosed_without_claiming_it_was_applied()
+    {
+        var request = new SearchRequest(
+            Markets(UnitedKingdom), ["Technology"], ["Architect"], [], null, [], null, [], [], ["intern"],
+            Criteria(SearchCriterion.Category, SearchCriterion.TargetRole), Criteria(SearchCriterion.ExcludedKeyword));
+
+        var plan = CreatePlan(request, Adzuna(filters: new Dictionary<SearchCriterion, FilterSupport>
+        {
+            [SearchCriterion.Category] = FilterSupport.SupportedByProvider,
+            [SearchCriterion.TargetRole] = FilterSupport.SupportedByProvider,
+            [SearchCriterion.ExcludedKeyword] = FilterSupport.Unsupported
+        }));
+
+        var source = Assert.Single(plan.EligibleSources);
+        var criterion = Assert.Single(source.Criteria, item => item.Criterion == SearchCriterion.ExcludedKeyword);
+        Assert.False(criterion.IsMandatory); Assert.Equal(CriterionDisposition.Unsupported, criterion.Disposition);
+    }
+
     [Theory]
     [InlineData(false, true, SourceHealth.Healthy, CapacityAvailability.Available, CapacityAvailability.Available, SourcePlanReason.NotAuthorized)]
     [InlineData(true, false, SourceHealth.Healthy, CapacityAvailability.Available, CapacityAvailability.Available, SourcePlanReason.LicenseDoesNotAllowDiscovery)]

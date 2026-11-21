@@ -123,8 +123,8 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
     private static bool PlanIsValid(SearchRequest request, DiscoveryPlan plan) => plan.Sources.All(source =>
         source.SelectedMarkets.IsSubsetOf(request.SourceMarkets) &&
         source.Criteria.GroupBy(criterion => criterion.Criterion).All(group => group.Count() == 1) &&
-        request.MandatoryCriteria.All(criterion => source.Criteria.Any(planned => planned.Criterion == criterion && planned.IsMandatory &&
-            planned.Disposition is CriterionDisposition.AppliedByProvider or CriterionDisposition.AppliedPostFetch)) &&
+        (!source.IsEligible || request.MandatoryCriteria.All(criterion => source.Criteria.Any(planned => planned.Criterion == criterion && planned.IsMandatory &&
+            planned.Disposition is CriterionDisposition.AppliedByProvider or CriterionDisposition.AppliedPostFetch))) &&
         request.PreferredCriteria.All(criterion => source.Criteria.Any(planned => planned.Criterion == criterion && !planned.IsMandatory)) &&
         source.Criteria.All(planned => planned.IsMandatory ? request.MandatoryCriteria.Contains(planned.Criterion) : request.PreferredCriteria.Contains(planned.Criterion)));
     private static SourceExecutionOutcome Outcome(SourceId source, CountryCode market, SourceExecutionStatus status, string code) =>
