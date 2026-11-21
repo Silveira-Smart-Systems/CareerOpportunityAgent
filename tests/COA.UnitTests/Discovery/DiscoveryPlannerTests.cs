@@ -119,6 +119,31 @@ public sealed class DiscoveryPlannerTests
     }
 
     [Theory]
+    [InlineData(SearchCriterion.Contract, FilterSupport.Unsupported)]
+    [InlineData(SearchCriterion.Contract, FilterSupport.UnknownSemantics)]
+    [InlineData(SearchCriterion.Salary, FilterSupport.Unsupported)]
+    [InlineData(SearchCriterion.Salary, FilterSupport.UnknownSemantics)]
+    [InlineData(SearchCriterion.Language, FilterSupport.Unsupported)]
+    [InlineData(SearchCriterion.Language, FilterSupport.UnknownSemantics)]
+    [InlineData(SearchCriterion.Skill, FilterSupport.Unsupported)]
+    [InlineData(SearchCriterion.Skill, FilterSupport.UnknownSemantics)]
+    [InlineData(SearchCriterion.ExcludedKeyword, FilterSupport.Unsupported)]
+    [InlineData(SearchCriterion.ExcludedKeyword, FilterSupport.UnknownSemantics)]
+    public void Each_new_mandatory_filter_fails_closed_when_not_safely_supported(SearchCriterion criterion, FilterSupport support)
+    {
+        var request = new SearchRequest(Markets(UnitedKingdom), ["Technology"], ["Architect"], [], null,
+            ["Permanent"], new COA.Domain.SearchProfiles.SalaryPreference(1m, null, "EUR", COA.Domain.SearchProfiles.SalaryPeriod.Monthly),
+            ["English"], ["C#"], ["intern"], Criteria(criterion), []);
+
+        var plan = CreatePlan(request, Adzuna(filters: new Dictionary<SearchCriterion, FilterSupport> { [criterion] = support }));
+
+        var source = Assert.Single(plan.Sources);
+        Assert.False(source.IsEligible); Assert.Contains(SourcePlanReason.MandatoryCriterionUnsupported, source.Reasons);
+        Assert.Equal(support == FilterSupport.Unsupported ? CriterionDisposition.Unsupported : CriterionDisposition.UnknownSemantics,
+            Assert.Single(source.Criteria).Disposition);
+    }
+
+    [Theory]
     [InlineData(false, true, SourceHealth.Healthy, CapacityAvailability.Available, CapacityAvailability.Available, SourcePlanReason.NotAuthorized)]
     [InlineData(true, false, SourceHealth.Healthy, CapacityAvailability.Available, CapacityAvailability.Available, SourcePlanReason.LicenseDoesNotAllowDiscovery)]
     [InlineData(true, true, SourceHealth.Unavailable, CapacityAvailability.Available, CapacityAvailability.Available, SourcePlanReason.SourceUnavailable)]

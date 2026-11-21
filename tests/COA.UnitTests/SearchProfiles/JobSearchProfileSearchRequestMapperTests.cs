@@ -53,6 +53,18 @@ public sealed class JobSearchProfileSearchRequestMapperTests
     }
 
     [Fact]
+    public void Multiple_filled_unclassified_families_are_reported_together()
+    {
+        var profile = Profile(mandatory: [SearchProfileCriterion.Category, SearchProfileCriterion.TargetRole]);
+
+        var result = Assert.IsType<IncompleteProfile>(_mapper.Map(profile));
+
+        Assert.True(result.UnclassifiedCriteria.SetEquals([
+            SearchCriterion.WorkMode, SearchCriterion.RemoteFromCountry, SearchCriterion.Contract,
+            SearchCriterion.Salary, SearchCriterion.Language, SearchCriterion.Skill, SearchCriterion.ExcludedKeyword]));
+    }
+
+    [Fact]
     public void Optional_absence_is_not_incomplete_and_non_technology_profile_maps()
     {
         var profile = JobSearchProfile.Create(Guid.NewGuid(), "Clinical", new JobSearchProfilePreferences(
