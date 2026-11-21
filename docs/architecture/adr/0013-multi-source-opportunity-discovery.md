@@ -33,6 +33,8 @@ Adapters must return a `Task` promptly and perform provider I/O asynchronously; 
 
 `MaxConcurrentSourceExecutions` limits source-market operations within one `DiscoveryOrchestrator.ExecuteAsync` invocation; it is not a process-wide or distributed quota. The execution retains and then disposes its limiter only after all active and timed-out late operations have resolved.
 
+When caller cancellation occurs after a reservation but before an attempt starts, release is attempted exactly once and caller cancellation remains the observable result. A release failure cannot be carried in `DiscoveryOutcome` because cancellation has no outcome; a future structured execution telemetry sink may record it, but that infrastructure is outside this phase.
+
 Adapters are Infrastructure implementations. Each encapsulates authentication and external API details, translates planned neutral criteria to provider parameters, and returns a common intermediate `SourceOpportunityCandidate`. It preserves source identifiers, URLs, provenance, observed values, unknown attributes, and structured failures. It does not perform global normalization, deduplication, persistence, or matching.
 
 Discovery and ingestion remain separate. Discovery selects and searches sources. A later ingestion pipeline validates data-use rights, normalizes candidates, preserves source occurrences/provenance, deduplicates, and persists only when authorized. Matching remains a separate evaluation of a search profile against a normalized global opportunity.

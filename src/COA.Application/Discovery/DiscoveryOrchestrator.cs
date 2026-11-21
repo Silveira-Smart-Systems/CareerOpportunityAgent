@@ -60,7 +60,8 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
             {
                 if (callerToken.IsCancellationRequested)
                 {
-                    await permit.ReleaseAsync(CancellationToken.None);
+                    try { await permit.ReleaseAsync(CancellationToken.None); }
+                    catch { /* Cancellation has no DiscoveryOutcome; see ADR-0013 for this boundary. */ }
                     released = true;
                     callerToken.ThrowIfCancellationRequested();
                 }
