@@ -1,0 +1,157 @@
+.opportunities-page {
+    margin: 0 auto;
+    max-width: 960px;
+    padding: 1.5rem;
+}
+
+.page-header,
+.section-heading,
+.opportunity-summary,
+.assessment {
+    align-items: center;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+}
+
+.page-header {
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+}
+
+.page-header h1,
+.page-header p,
+.opportunity-summary h3,
+.imported-at {
+    margin: 0;
+}
+
+.page-header p,
+.imported-at {
+    color: #5f6368;
+}
+
+.import-panel,
+.opportunity-card {
+    border: 1px solid #d9dce1;
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+}
+
+.form-grid {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 1rem;
+}
+
+.form-field {
+    display: grid;
+    gap: 0.35rem;
+}
+
+.form-field-wide {
+    grid-column: 1 / -1;
+}
+
+.form-field input,
+.form-field textarea {
+    box-sizing: border-box;
+    font: inherit;
+    padding: 0.5rem;
+    width: 100%;
+}
+
+button,
+a {
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+    padding: 0.45rem 0.75rem;
+}
+
+button:disabled {
+    cursor: wait;
+}
+
+.status-message {
+    border-radius: 0.25rem;
+    padding: 0.75rem;
+}
+
+.success {
+    background: #e7f6eb;
+    color: #176b32;
+}
+
+.error {
+    background: #fce8e6;
+    color: #a50e0e;
+}
+
+.opportunity-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.opportunity-card {
+    margin: 0;
+}
+
+.assessment {
+    justify-content: flex-start;
+    margin: 1rem 0;
+}
+
+.score {
+    font-size: 1.35rem;
+    font-weight: 700;
+}
+
+.eligibility,
+.hard-constraint {
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    padding: 0.2rem 0.6rem;
+}
+
+.eligible {
+    background: #e7f6eb;
+    color: #176b32;
+}
+
+.ineligible {
+    background: #fce8e6;
+    color: #a50e0e;
+}
+
+.hard-constraint {
+    background: #fff3cd;
+    color: #725600;
+    margin-left: 0.5rem;
+}
+
+.criteria-list {
+    display: grid;
+    gap: 0.35rem;
+}
+
+@media (max-width: 640px) {
+    .opportunities-page {
+        padding: 1rem;
+    }
+
+    .page-header,
+    .section-heading,
+    .opportunity-summary {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .form-grid {
+        grid-template-columns: 1fr;
+    }
+}

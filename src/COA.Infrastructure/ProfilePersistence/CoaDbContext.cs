@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using COA.Infrastructure.OpportunityPersistence;
 
 namespace COA.Infrastructure.ProfilePersistence;
 
@@ -8,6 +9,7 @@ public sealed class CoaDbContext(DbContextOptions<CoaDbContext> options) : DbCon
     internal DbSet<ProfileEntity> Profiles => Set<ProfileEntity>();
     internal DbSet<ProfileVersionEntity> ProfileVersions => Set<ProfileVersionEntity>();
     internal DbSet<ProfileEvidenceEntity> ProfileEvidence => Set<ProfileEvidenceEntity>();
+    internal DbSet<OpportunityEntity> Opportunities => Set<OpportunityEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

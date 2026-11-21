@@ -2,9 +2,12 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using COA.Api.Authentication;
 using COA.Api.Profile;
+using COA.Api.Opportunity;
 using COA.Application.Matching;
 using COA.Application.Profile;
+using COA.Application.Opportunity;
 using COA.Infrastructure.ProfilePersistence;
+using COA.Infrastructure.OpportunityPersistence;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -29,6 +32,8 @@ builder.Services.AddDbContextFactory<CoaDbContext>(options =>
 });
 builder.Services.AddScoped<IProfileStore, SqlServerProfileStore>();
 builder.Services.AddScoped<ProfileUseCases>();
+builder.Services.AddScoped<IOpportunityStore, SqlServerOpportunityStore>();
+builder.Services.AddScoped<OpportunityUseCases>();
 builder.Services.AddApiJwtBearerAuthentication(builder.Configuration, builder.Environment);
 builder.Services.AddAuthorization();
 
@@ -54,6 +59,15 @@ app.MapGet("/api/me", (HttpContext context) =>
 }).RequireAuthorization();
 
 var profile = app.MapGroup("/api/profile").RequireAuthorization();
+var opportunities = app.MapGroup("/api/opportunities").RequireAuthorization();
+opportunities.MapPost("", async (HttpContext context, OpportunityUseCases useCases, OpportunityImportRequest request, CancellationToken ct) =>
+{
+    if (!AuthenticatedOwner.TryCreateOwnerIdentity(context.User, out var owner)) return ForbiddenProblem();
+    try { var result=await useCases.ImportAsync(owner,request.Url,request.Title,request.Description,ct); return result.Created ? Results.Created("/api/opportunities", new { result.Opportunity, result.Assessment }) : ConflictProblem(); }
+    catch (ArgumentException) { return BadRequestProblem(); }
+});
+opportunities.MapGet("", async (HttpContext context, OpportunityUseCases useCases, CancellationToken ct) =>
+{ if (!AuthenticatedOwner.TryCreateOwnerIdentity(context.User,out var owner)) return ForbiddenProblem(); return Results.Ok((await useCases.ListScoredAsync(owner,ct)).Select(x => new { x.Opportunity, x.Assessment })); });
 
 profile.MapGet("", async (HttpContext context, ProfileUseCases useCases, CancellationToken cancellationToken) =>
 {

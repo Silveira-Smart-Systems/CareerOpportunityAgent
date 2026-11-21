@@ -1,0 +1,195 @@
+@page "/opportunities"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
+@using COA.Web.Api
+@inject CoaApiClient CoaApiClient
+
+<PageTitle>Opportunities</PageTitle>
+
+<main class="opportunities-page">
+    <header class="page-header">
+        <div>
+            <h1>Opportunities</h1>
+            <p>Import an opportunity and review its evidence-backed match.</p>
+        </div>
+        <a href="/dashboard">Back to dashboard</a>
+    </header>
+
+    <section class="import-panel" aria-labelledby="import-heading">
+        <h2 id="import-heading">Import opportunity</h2>
+        <EditForm Model="form" OnValidSubmit="ImportAsync">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="form-grid">
+                <div class="form-field form-field-wide">
+                    <label for="opportunity-url">Original URL</label>
+                    <InputText id="opportunity-url" @bind-Value="form.Url" type="url" autocomplete="url" />
+                    <ValidationMessage For="@(() => form.Url)" />
+                </div>
+                <div class="form-field form-field-wide">
+                    <label for="opportunity-title">Title</label>
+                    <InputText id="opportunity-title" @bind-Value="form.Title" autocomplete="off" />
+                    <ValidationMessage For="@(() => form.Title)" />
+                </div>
+                <div class="form-field form-field-wide">
+                    <label for="opportunity-description">Description</label>
+                    <InputTextArea id="opportunity-description" @bind-Value="form.Description" rows="6" />
+                    <ValidationMessage For="@(() => form.Description)" />
+                </div>
+            </div>
+
+            <button type="submit" disabled="@isImporting">
+                @(isImporting ? "Importing…" : "Import opportunity")
+            </button>
+        </EditForm>
+    </section>
+
+    @if (!string.IsNullOrWhiteSpace(successMessage))
+    {
+        <p class="status-message success" role="status">@successMessage</p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <p class="status-message error" role="alert">@errorMessage</p>
+    }
+
+    <section aria-labelledby="imported-heading">
+        <div class="section-heading">
+            <h2 id="imported-heading">Imported opportunities</h2>
+            <button type="button" @onclick="LoadOpportunitiesAsync" disabled="@isLoading">Refresh</button>
+        </div>
+
+        @if (isLoading)
+        {
+            <p role="status">Loading opportunities…</p>
+        }
+        else if (opportunities.Count == 0)
+        {
+            <p>No opportunities have been imported yet.</p>
+        }
+        else
+        {
+            <div class="opportunity-list">
+                @foreach (var item in opportunities)
+                {
+                    <article class="opportunity-card">
+                        <div class="opportunity-summary">
+                            <div>
+                                <h3>@item.Opportunity.Title</h3>
+                                <p class="imported-at">Imported @item.Opportunity.ImportedAtUtc.ToLocalTime().ToString("g")</p>
+                            </div>
+                            <a href="@item.Opportunity.OriginalUrl" target="_blank" rel="noopener noreferrer">Open opportunity</a>
+                        </div>
+                        <div class="assessment">
+                            <span class="score">@item.Assessment.Score.ToString("0.##")%</span>
+                            <span class="eligibility @(item.Assessment.Eligible ? "eligible" : "ineligible")">
+                                @(item.Assessment.Eligible ? "Eligible" : "Not eligible")
+                            </span>
+                        </div>
+                        <details>
+                            <summary>Match reasons (@item.Assessment.Criteria.Count)</summary>
+                            <ul class="criteria-list">
+                                @foreach (var criterion in item.Assessment.Criteria)
+                                {
+                                    <li>
+                                        <strong>@criterion.Code</strong>: @FormatEvidence(criterion.Evidence)
+                                        <span>(@criterion.Weight%)</span>
+                                        @if (criterion.IsHardConstraint)
+                                        {
+                                            <span class="hard-constraint">Required</span>
+                                        }
+                                    </li>
+                                }
+                            </ul>
+                        </details>
+                    </article>
+                }
+            </div>
+        }
+    </section>
+</main>
+
+@code {
+    private OpportunityForm form = new();
+    private IReadOnlyList<ScoredOpportunity> opportunities = [];
+    private bool isImporting;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string? successMessage;
+
+    protected override Task OnInitializedAsync() => LoadOpportunitiesAsync();
+
+    private async Task ImportAsync()
+    {
+        isImporting = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            await CoaApiClient.ImportOpportunityAsync(
+                new OpportunityImportRequest(form.Url, form.Title, form.Description));
+            form = new OpportunityForm();
+            successMessage = "Opportunity imported successfully.";
+            await LoadOpportunitiesAsync();
+        }
+        catch (Exception exception)
+        {
+            errorMessage = GetErrorMessage(exception);
+        }
+        finally
+        {
+            isImporting = false;
+        }
+    }
+
+    private async Task LoadOpportunitiesAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            opportunities = await CoaApiClient.GetOpportunitiesAsync();
+        }
+        catch (Exception exception)
+        {
+            errorMessage = GetErrorMessage(exception);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private static string GetErrorMessage(Exception exception) => exception switch
+    {
+        CoaApiAuthenticationException => "Your session needs a new sign-in before it can access the COA API.",
+        CoaApiAuthorizationException => "You are not authorized to access opportunities.",
+        CoaApiConflictException => "This opportunity has already been imported.",
+        CoaApiRequestException requestException => $"The COA API could not complete the request (HTTP {(int)requestException.StatusCode}).",
+        _ => "The opportunity request could not be completed. Please try again."
+    };
+
+    private static string FormatEvidence(COA.Domain.Matching.EvidenceState evidence) => evidence switch
+    {
+        COA.Domain.Matching.EvidenceState.Matched => "Matched",
+        COA.Domain.Matching.EvidenceState.Missing => "Missing",
+        _ => "Not proven"
+    };
+
+    private sealed class OpportunityForm
+    {
+        [Required, Url]
+        public string Url { get; set; } = string.Empty;
+
+        [Required, StringLength(200)]
+        public string Title { get; set; } = string.Empty;
+
+        [Required, StringLength(12000)]
+        public string Description { get; set; } = string.Empty;
+    }
+}

@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <UserSecretsId>7cc3fa31-e8c3-4bd8-8296-79bf1832b9f1</UserSecretsId>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../COA.Application/COA.Application.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.0" />

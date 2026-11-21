@@ -106,3 +106,6 @@ internal sealed class ProfileEvidenceConfiguration : IEntityTypeConfiguration<Pr
             .HasConstraintName("FK_ProfileEvidence_ProfileVersions_ProfileId_Version");
     }
 }
+
+internal sealed class OpportunityConfiguration : IEntityTypeConfiguration<COA.Infrastructure.OpportunityPersistence.OpportunityEntity>
+{ public void Configure(EntityTypeBuilder<COA.Infrastructure.OpportunityPersistence.OpportunityEntity> b){b.ToTable("Opportunities");b.HasKey(x=>x.Id);b.Property(x=>x.OwnerKey).HasColumnType("binary(32)").IsRequired();b.Property(x=>x.OriginalUrl).HasMaxLength(2048).IsRequired();b.Property(x=>x.CanonicalUrl).HasMaxLength(2048).IsRequired();b.Property(x=>x.Title).HasMaxLength(200).IsRequired();b.Property(x=>x.Description).HasMaxLength(12000).IsRequired();b.HasIndex(x=>new{x.OwnerKey,x.CanonicalUrl}).IsUnique();} }
