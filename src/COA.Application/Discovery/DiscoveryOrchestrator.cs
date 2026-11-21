@@ -24,13 +24,17 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
         DiscoveryExecutionOptions options, SemaphoreSlim limiter, CancellationToken callerToken)
     {
         await limiter.WaitAsync(callerToken);
+        var releaseSlot = true;
         try
         {
             if (!MandatoryCriteriaExecutable(source)) return Outcome(source.SourceId, market, SourceExecutionStatus.InvalidPlan, "MandatoryCriterionNotExecutable");
             var adapter = adapters.Find(source.SourceId);
             if (adapter is null) return Outcome(source.SourceId, market, SourceExecutionStatus.AdapterMissing, "AdapterMissing");
             var target = new SourceExecutionTarget(source.SourceId, market, request, source.Criteria);
-            var authorization = await gate.AuthorizeAndReserveAsync(target, callerToken);
+            SourceExecutionAuthorization authorization;
+            try { authorization = await gate.AuthorizeAndReserveAsync(target, callerToken); }
+            catch (OperationCanceledException) when (callerToken.IsCancellationRequested) { throw; }
+            catch { return Outcome(source.SourceId, market, SourceExecutionStatus.Failed, "GateFailed"); }
             if (authorization is SourceExecutionAuthorization.Blocked blocked)
                 return Outcome(source.SourceId, market, SourceExecutionStatus.Blocked, blocked.Reason.ToString());
 
@@ -45,7 +49,9 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
                     released = true;
                     callerToken.ThrowIfCancellationRequested();
                 }
-                await permit.MarkAttemptStartedAsync(callerToken); started = true;
+                try { await permit.MarkAttemptStartedAsync(callerToken); started = true; }
+                catch (OperationCanceledException) when (callerToken.IsCancellationRequested) { throw; }
+                catch { return Outcome(source.SourceId, market, SourceExecutionStatus.Failed, "PermitStartFailed"); }
                 using var timeout = new CancellationTokenSource(options.SourceTimeout, _timeProvider);
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(callerToken, timeout.Token);
                 SourceSearchResult result;
@@ -54,7 +60,13 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
                 {
                     var completed = await Task.WhenAny(searchTask, Task.Delay(options.SourceTimeout, _timeProvider, callerToken));
                     callerToken.ThrowIfCancellationRequested();
-                    if (completed != searchTask) return Outcome(source.SourceId, market, SourceExecutionStatus.TimedOut, "TimedOut");
+                    if (completed != searchTask)
+                    {
+                        releaseSlot = false;
+                        _ = searchTask.ContinueWith(_ => limiter.Release(), CancellationToken.None,
+                            TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+                        return Outcome(source.SourceId, market, SourceExecutionStatus.TimedOut, "TimedOut");
+                    }
                     result = await searchTask;
                 }
                 catch (OperationCanceledException) when (callerToken.IsCancellationRequested) { throw; }
@@ -67,11 +79,17 @@ public sealed class DiscoveryOrchestrator(IOpportunitySourceAdapterResolver adap
             }
             finally
             {
-                if (started) await permit.ConsumeAsync(CancellationToken.None);
-                else if (!released) await permit.ReleaseAsync(CancellationToken.None);
+                try
+                {
+                    if (started) await permit.ConsumeAsync(CancellationToken.None);
+                    else if (!released) await permit.ReleaseAsync(CancellationToken.None);
+                }
+                catch when (!callerToken.IsCancellationRequested) { }
             }
         }
-        finally { limiter.Release(); }
+        catch (OperationCanceledException) when (callerToken.IsCancellationRequested) { throw; }
+        catch { return Outcome(source.SourceId, market, SourceExecutionStatus.Failed, "PermitLifecycleFailed"); }
+        finally { if (releaseSlot) limiter.Release(); }
     }
 
     private static bool MandatoryCriteriaExecutable(PlannedSource source) => source.IsEligible && source.Criteria.Where(c => c.IsMandatory)
