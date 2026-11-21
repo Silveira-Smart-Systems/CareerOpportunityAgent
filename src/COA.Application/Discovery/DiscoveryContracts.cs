@@ -1,3 +1,6 @@
+using System.Collections.Frozen;
+using System.Collections.ObjectModel;
+
 namespace COA.Application.Discovery;
 
 public readonly record struct SourceId
@@ -77,11 +80,30 @@ public sealed record SearchRequest(
     }
 }
 
-public sealed record SourceCapabilities(
-    SourceId SourceId,
-    IReadOnlySet<CountryCode> SupportedSourceMarkets,
-    IReadOnlyDictionary<SearchCriterion, FilterSupport> Filters)
+public sealed record SourceCapabilities
 {
+    public SourceCapabilities(
+        SourceId sourceId,
+        IEnumerable<CountryCode> supportedSourceMarkets,
+        IEnumerable<KeyValuePair<SearchCriterion, FilterSupport>> filters)
+    {
+        ArgumentNullException.ThrowIfNull(supportedSourceMarkets);
+        ArgumentNullException.ThrowIfNull(filters);
+
+        SourceId = sourceId;
+        SupportedSourceMarkets = supportedSourceMarkets.ToFrozenSet();
+        Filters = filters.ToFrozenDictionary();
+
+        if (Filters.Values.Any(support => !Enum.IsDefined(support)))
+            throw new ArgumentException("Filter support contains an invalid enum value.", nameof(filters));
+    }
+
+    public SourceId SourceId { get; }
+
+    public IReadOnlySet<CountryCode> SupportedSourceMarkets { get; }
+
+    public IReadOnlyDictionary<SearchCriterion, FilterSupport> Filters { get; }
+
     public FilterSupport GetFilterSupport(SearchCriterion criterion) =>
         Filters.TryGetValue(criterion, out var support)
             ? support
@@ -93,15 +115,54 @@ public sealed record SourceLicenseRights(
     bool AllowsRetention,
     bool AllowsRedistribution);
 
-public sealed record RateLimitPolicy(int? MaximumRequestsPerDay);
+public sealed record RateLimitPolicy
+{
+    public RateLimitPolicy(int? maximumRequestsPerDay)
+    {
+        if (maximumRequestsPerDay is <= 0)
+            throw new ArgumentOutOfRangeException(nameof(maximumRequestsPerDay));
 
-public sealed record SourceBudgetPolicy(decimal? MaximumCostPerRequest);
+        MaximumRequestsPerDay = maximumRequestsPerDay;
+    }
 
-public sealed record SourceExecutionPolicy(
-    bool IsAuthorized,
-    SourceLicenseRights LicenseRights,
-    RateLimitPolicy RateLimit,
-    SourceBudgetPolicy Budget);
+    public int? MaximumRequestsPerDay { get; }
+}
+
+public sealed record SourceBudgetPolicy
+{
+    public SourceBudgetPolicy(decimal? maximumCostPerRequest)
+    {
+        if (maximumCostPerRequest is < 0)
+            throw new ArgumentOutOfRangeException(nameof(maximumCostPerRequest));
+
+        MaximumCostPerRequest = maximumCostPerRequest;
+    }
+
+    public decimal? MaximumCostPerRequest { get; }
+}
+
+public sealed record SourceExecutionPolicy
+{
+    public SourceExecutionPolicy(
+        bool isAuthorized,
+        SourceLicenseRights licenseRights,
+        RateLimitPolicy rateLimit,
+        SourceBudgetPolicy budget)
+    {
+        IsAuthorized = isAuthorized;
+        LicenseRights = licenseRights ?? throw new ArgumentNullException(nameof(licenseRights));
+        RateLimit = rateLimit ?? throw new ArgumentNullException(nameof(rateLimit));
+        Budget = budget ?? throw new ArgumentNullException(nameof(budget));
+    }
+
+    public bool IsAuthorized { get; }
+
+    public SourceLicenseRights LicenseRights { get; }
+
+    public RateLimitPolicy RateLimit { get; }
+
+    public SourceBudgetPolicy Budget { get; }
+}
 
 public enum SourceHealth
 {
@@ -117,16 +178,45 @@ public enum CapacityAvailability
     Unknown
 }
 
-public sealed record SourceRuntimeStatus(
-    SourceHealth Health,
-    CapacityAvailability Quota,
-    CapacityAvailability Budget,
-    IReadOnlyList<string> TemporaryRestrictions,
-    DateTimeOffset ObservedAtUtc);
+public sealed record SourceRuntimeStatus
+{
+    public SourceRuntimeStatus(
+        SourceHealth health,
+        CapacityAvailability quota,
+        CapacityAvailability budget,
+        IEnumerable<string> temporaryRestrictions,
+        DateTimeOffset observedAtUtc)
+    {
+        ArgumentNullException.ThrowIfNull(temporaryRestrictions);
+
+        if (!Enum.IsDefined(health) || !Enum.IsDefined(quota) || !Enum.IsDefined(budget))
+            throw new ArgumentException("Runtime status contains an invalid enum value.");
+
+        var restrictions = temporaryRestrictions.ToArray();
+        if (restrictions.Any(string.IsNullOrWhiteSpace))
+            throw new ArgumentException("Temporary restrictions must be nonempty.", nameof(temporaryRestrictions));
+
+        Health = health;
+        Quota = quota;
+        Budget = budget;
+        TemporaryRestrictions = restrictions.ToFrozenSet(StringComparer.Ordinal);
+        ObservedAtUtc = observedAtUtc;
+    }
+
+    public SourceHealth Health { get; }
+
+    public CapacityAvailability Quota { get; }
+
+    public CapacityAvailability Budget { get; }
+
+    public IReadOnlySet<string> TemporaryRestrictions { get; }
+
+    public DateTimeOffset ObservedAtUtc { get; }
+}
 
 public interface ISourceCapabilityRegistry
 {
-    IReadOnlyList<SourceCapabilities> GetEnabled();
+    IReadOnlyList<SourceCapabilities> GetAll();
 
     SourceCapabilities? Find(SourceId sourceId);
 }
@@ -135,27 +225,54 @@ public sealed class SourceCapabilityRegistry(IEnumerable<SourceCapabilities> sou
 {
     private readonly IReadOnlyDictionary<SourceId, SourceCapabilities> _sources =
         (sources ?? throw new ArgumentNullException(nameof(sources)))
-        .ToDictionary(source => source.SourceId);
+        .ToFrozenDictionary(source => source?.SourceId
+            ?? throw new ArgumentException("A source capability is required.", nameof(sources)));
 
-    public IReadOnlyList<SourceCapabilities> GetEnabled() => _sources.Values.ToArray();
+    public IReadOnlyList<SourceCapabilities> GetAll() =>
+        new ReadOnlyCollection<SourceCapabilities>(_sources.Values
+            .OrderBy(source => source.SourceId.Value, StringComparer.Ordinal)
+            .ToList());
 
     public SourceCapabilities? Find(SourceId sourceId) =>
         _sources.GetValueOrDefault(sourceId);
 }
 
-public sealed record SourcePlanningState(
-    SourceCapabilities Capabilities,
-    SourceExecutionPolicy ExecutionPolicy,
-    SourceRuntimeStatus RuntimeStatus);
-
-public sealed record DiscoveryPlanningSnapshot(IReadOnlyList<SourcePlanningState> Sources)
+public sealed record SourcePlanningState
 {
-    public void Validate()
+    public SourcePlanningState(
+        SourceCapabilities capabilities,
+        SourceExecutionPolicy executionPolicy,
+        SourceRuntimeStatus runtimeStatus)
     {
-        ArgumentNullException.ThrowIfNull(Sources);
-        if (Sources.Select(source => source.Capabilities.SourceId).Distinct().Count() != Sources.Count)
-            throw new ArgumentException("A planning snapshot cannot contain duplicate sources.", nameof(Sources));
+        Capabilities = capabilities ?? throw new ArgumentNullException(nameof(capabilities));
+        ExecutionPolicy = executionPolicy ?? throw new ArgumentNullException(nameof(executionPolicy));
+        RuntimeStatus = runtimeStatus ?? throw new ArgumentNullException(nameof(runtimeStatus));
     }
+
+    public SourceCapabilities Capabilities { get; }
+
+    public SourceExecutionPolicy ExecutionPolicy { get; }
+
+    public SourceRuntimeStatus RuntimeStatus { get; }
+}
+
+public sealed record DiscoveryPlanningSnapshot
+{
+    public DiscoveryPlanningSnapshot(IEnumerable<SourcePlanningState> sources)
+    {
+        ArgumentNullException.ThrowIfNull(sources);
+
+        var copiedSources = sources.ToArray();
+        if (copiedSources.Any(source => source is null))
+            throw new ArgumentException("A planning snapshot cannot contain null sources.", nameof(sources));
+        if (copiedSources.Select(source => source.Capabilities.SourceId).Distinct().Count() != copiedSources.Length)
+            throw new ArgumentException("A planning snapshot cannot contain duplicate sources.", nameof(Sources));
+
+        Sources = Array.AsReadOnly(copiedSources);
+    }
+
+    public IReadOnlyList<SourcePlanningState> Sources { get; }
+
 }
 
 public enum CriterionDisposition

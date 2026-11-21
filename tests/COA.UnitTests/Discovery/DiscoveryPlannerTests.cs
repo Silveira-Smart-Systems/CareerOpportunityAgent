@@ -94,7 +94,8 @@ public sealed class DiscoveryPlannerTests
         var source = Assert.Single(plan.Sources);
         Assert.False(source.IsEligible);
         Assert.Contains(SourcePlanReason.MandatoryCriterionUnsupported, source.Reasons);
-        var criterion = Assert.Single(source.Criteria);
+        var criterion = Assert.Single(source.Criteria, item =>
+            item.Criterion == SearchCriterion.RemoteFromCountry);
         Assert.Equal(CriterionDisposition.UnknownSemantics, criterion.Disposition);
     }
 
@@ -144,13 +145,52 @@ public sealed class DiscoveryPlannerTests
     public void Same_request_and_snapshot_produce_the_same_plan()
     {
         var request = Request(markets: Markets(Portugal, UnitedKingdom));
-        var snapshot = Snapshot(Adzuna(), PortugalProvider());
         var planner = new DiscoveryPlanner();
 
-        var first = planner.CreatePlan(request, snapshot);
-        var second = planner.CreatePlan(request, snapshot);
+        var first = planner.CreatePlan(request, Snapshot(Adzuna(), PortugalProvider()));
+        var second = planner.CreatePlan(request, Snapshot(PortugalProvider(), Adzuna()));
 
-        Assert.Equal(first, second);
+        AssertPlansAreEquivalent(first, second);
+    }
+
+    [Fact]
+    public void Snapshot_is_not_affected_by_mutating_input_collections()
+    {
+        var markets = new HashSet<CountryCode> { UnitedKingdom };
+        var filters = new Dictionary<SearchCriterion, FilterSupport>
+        {
+            [SearchCriterion.Category] = FilterSupport.SupportedByProvider,
+            [SearchCriterion.TargetRole] = FilterSupport.SupportedByProvider
+        };
+        var restrictions = new List<string>();
+        var source = Source(
+            "mutable-input-source",
+            markets,
+            filters,
+            Policy(),
+            new SourceRuntimeStatus(
+                SourceHealth.Healthy,
+                CapacityAvailability.Available,
+                CapacityAvailability.Available,
+                restrictions,
+                DateTimeOffset.UnixEpoch));
+        var sources = new[] { source };
+        var snapshot = Snapshot(sources);
+
+        markets.Clear();
+        filters[SearchCriterion.TargetRole] = FilterSupport.Unsupported;
+        restrictions.Add("Maintenance window");
+        sources[0] = PortugalProvider();
+
+        var plan = new DiscoveryPlanner().CreatePlan(Request(markets: Markets(UnitedKingdom)), snapshot);
+
+        var plannedSource = Assert.Single(plan.EligibleSources);
+        Assert.Equal(new SourceId("mutable-input-source"), plannedSource.SourceId);
+        Assert.Contains(UnitedKingdom, plannedSource.SelectedMarkets);
+        Assert.DoesNotContain(SourcePlanReason.TemporarilyRestricted, plannedSource.Reasons);
+        Assert.Equal(
+            CriterionDisposition.AppliedByProvider,
+            plannedSource.Criteria.Single(criterion => criterion.Criterion == SearchCriterion.TargetRole).Disposition);
     }
 
     [Fact]
@@ -198,11 +238,11 @@ public sealed class DiscoveryPlannerTests
             mandatory ?? new HashSet<SearchCriterion>
             {
                 SearchCriterion.Category,
-                SearchCriterion.TargetRole,
-                SearchCriterion.WorkMode
+                SearchCriterion.TargetRole
             },
-            new HashSet<SearchCriterion>());
+            Criteria(SearchCriterion.WorkMode));
 
+    // Simulated planning capabilities only; this is not a declaration of real API support.
     private static SourcePlanningState Adzuna(
         IReadOnlyDictionary<SearchCriterion, FilterSupport>? filters = null,
         SourceExecutionPolicy? policy = null,
@@ -239,7 +279,7 @@ public sealed class DiscoveryPlannerTests
         {
             [SearchCriterion.Category] = FilterSupport.SupportedByProvider,
             [SearchCriterion.TargetRole] = FilterSupport.SupportedByProvider,
-            [SearchCriterion.WorkMode] = FilterSupport.SafePostFilter
+            [SearchCriterion.WorkMode] = FilterSupport.UnknownSemantics
         };
 
     private static SourceExecutionPolicy Policy(bool authorized = true, bool licensed = true) =>
@@ -253,5 +293,28 @@ public sealed class DiscoveryPlannerTests
         SourceHealth health = SourceHealth.Healthy,
         CapacityAvailability quota = CapacityAvailability.Available,
         CapacityAvailability budget = CapacityAvailability.Available) =>
-        new(health, quota, budget, [], DateTimeOffset.UnixEpoch);
+        new(health, quota, budget, Array.Empty<string>(), DateTimeOffset.UnixEpoch);
+
+    private static void AssertPlansAreEquivalent(DiscoveryPlan expected, DiscoveryPlan actual)
+    {
+        Assert.Equal(expected.Sources.Count, actual.Sources.Count);
+
+        foreach (var (expectedSource, actualSource) in expected.Sources.Zip(actual.Sources))
+        {
+            Assert.Equal(expectedSource.SourceId, actualSource.SourceId);
+            Assert.Equal(expectedSource.IsEligible, actualSource.IsEligible);
+            Assert.Equal(
+                expectedSource.SelectedMarkets.OrderBy(market => market.Value),
+                actualSource.SelectedMarkets.OrderBy(market => market.Value));
+            Assert.Equal(expectedSource.Reasons, actualSource.Reasons);
+            Assert.Equal(expectedSource.Criteria.Count, actualSource.Criteria.Count);
+
+            foreach (var (expectedCriterion, actualCriterion) in expectedSource.Criteria.Zip(actualSource.Criteria))
+            {
+                Assert.Equal(expectedCriterion.Criterion, actualCriterion.Criterion);
+                Assert.Equal(expectedCriterion.IsMandatory, actualCriterion.IsMandatory);
+                Assert.Equal(expectedCriterion.Disposition, actualCriterion.Disposition);
+            }
+        }
+    }
 }

@@ -7,7 +7,6 @@ public sealed class DiscoveryPlanner : IDiscoveryPlanner
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(snapshot);
         request.Validate();
-        snapshot.Validate();
 
         var sources = snapshot.Sources
             .OrderBy(source => source.Capabilities.SourceId.Value, StringComparer.Ordinal)
