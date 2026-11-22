@@ -79,6 +79,7 @@
                         <div class="opportunity-summary">
                             <div>
                                 <h3>@item.Opportunity.Title</h3>
+                                @if (item.Opportunity.IsSynthetic) { <p><strong>Synthetic demo</strong></p> }
                                 <p class="imported-at">Imported @item.Opportunity.ImportedAtUtc.ToLocalTime().ToString("g")</p>
                             </div>
                             <a href="@item.Opportunity.OriginalUrl" target="_blank" rel="noopener noreferrer">Open opportunity</a>

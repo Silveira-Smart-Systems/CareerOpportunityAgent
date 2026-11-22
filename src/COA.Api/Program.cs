@@ -106,6 +106,15 @@ opportunities.MapPost("", async (HttpContext context, OpportunityUseCases useCas
 });
 opportunities.MapGet("", async (HttpContext context, OpportunityUseCases useCases, CancellationToken ct) =>
 { if (!AuthenticatedOwner.TryCreateOwnerIdentity(context.User,out var owner)) return ForbiddenProblem(); return Results.Ok((await useCases.ListScoredAsync(owner,ct)).Select(x => new { x.Opportunity, x.Assessment })); });
+if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Demo:EnableSyntheticSeed"))
+{
+    opportunities.MapPost("/seed-synthetic", async (HttpContext context, OpportunityUseCases useCases, CancellationToken ct) =>
+    {
+        if (!AuthenticatedOwner.TryCreateOwnerIdentity(context.User, out var owner)) return ForbiddenProblem();
+        var added = await useCases.SeedSyntheticDemoAsync(owner, ct);
+        return Results.Ok(new { added });
+    });
+}
 
 profile.MapGet("", async (HttpContext context, ProfileUseCases useCases, CancellationToken cancellationToken) =>
 {

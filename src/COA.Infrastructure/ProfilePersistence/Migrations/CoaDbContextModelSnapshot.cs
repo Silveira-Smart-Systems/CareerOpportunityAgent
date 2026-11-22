@@ -41,6 +41,11 @@ namespace COA.Infrastructure.ProfilePersistence.Migrations
                     b.Property<DateTime>("ImportedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<bool>("IsSynthetic")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("OriginalUrl")
                         .IsRequired()
                         .HasMaxLength(2048)
