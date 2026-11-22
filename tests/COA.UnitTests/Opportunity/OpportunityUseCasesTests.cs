@@ -1,6 +1,9 @@
 using COA.Application.Opportunity;
 using COA.Application.Profile;
+using COA.Application.SearchProfiles;
 using COA.Domain.Matching;
+using COA.Domain.Profile;
+using COA.Domain.SearchProfiles;
 using OpportunityModel = COA.Domain.Opportunity.Opportunity;
 using Xunit;
 
@@ -74,6 +77,21 @@ public sealed class OpportunityUseCasesTests
             item => Assert.Equal(EvidenceState.UnknownNotProven, item.Evidence));
     }
 
+    [Fact]
+    public async Task Contextual_matching_uses_proven_profile_evidence_once_per_list()
+    {
+        var owner = Owner();
+        var opportunities = new FakeOpportunityStore { Opportunities = [OpportunityModel.Create("https://jobs.example.test/context", "Architect", "dotnet remote role"), OpportunityModel.Create("https://jobs.example.test/unknown", "Other", "unknown")] };
+        var profiles = new RecordingProfileStore(CareerProfile.Create(Guid.NewGuid(), "Architect", [new ProfileEvidence("dotnet", "fixture", EvidenceOrigin.UserProvided)], new CareerPreferences(WorkArrangement.Remote, true, null, null, 0)));
+        var searches = new RecordingSearchStore();
+        var result = await new OpportunityUseCases(opportunities, profiles, searches).ListScoredAsync(owner);
+        Assert.Equal(1, profiles.Reads); Assert.Equal(1, searches.Reads);
+        Assert.Equal(EvidenceState.Matched, result[0].Assessment.Criteria.Single(x => x.Code == "technical").Evidence);
+        Assert.Equal(EvidenceState.UnknownNotProven, result[0].Assessment.Criteria.Single(x => x.Code == "work-model").Evidence);
+        Assert.False(result[0].Assessment.Eligible); // remote-only is a hard constraint and has no proven job evidence.
+        Assert.Equal(EvidenceState.UnknownNotProven, result[1].Assessment.Criteria.Single(x => x.Code == "technical").Evidence);
+    }
+
     private static OwnerIdentity Owner() => new("https://issuer.example", $"synthetic-{Guid.NewGuid():N}");
 
     private sealed class FakeOpportunityStore : IOpportunityStore
@@ -97,4 +115,6 @@ public sealed class OpportunityUseCasesTests
             return Task.FromResult(Opportunities);
         }
     }
+    private sealed class RecordingProfileStore(CareerProfile profile) : IProfileStore { public int Reads; public Task<CareerProfile?> GetCurrentAsync(OwnerIdentity owner,CancellationToken ct=default){Reads++;return Task.FromResult<CareerProfile?>(profile);} public Task<CreateProfileResult> CreateAsync(OwnerIdentity owner,CareerProfile profile,CancellationToken ct=default)=>throw new NotSupportedException(); public Task<CareerProfile?> GetVersionAsync(OwnerIdentity owner,int version,CancellationToken ct=default)=>throw new NotSupportedException(); public Task<ReviseProfileResult> ReviseAsync(OwnerIdentity owner,int version,CareerProfile profile,CancellationToken ct=default)=>throw new NotSupportedException(); }
+    private sealed class RecordingSearchStore : IJobSearchProfileStore { public int Reads; public Task<IReadOnlyList<JobSearchProfile>> ListAsync(OwnerIdentity owner,CancellationToken ct=default){Reads++;return Task.FromResult<IReadOnlyList<JobSearchProfile>>([]);} public Task<JobSearchProfile> CreateAsync(OwnerIdentity owner,JobSearchProfile profile,CancellationToken ct=default)=>throw new NotSupportedException(); public Task<JobSearchProfile?> GetAsync(OwnerIdentity owner,Guid id,CancellationToken ct=default)=>throw new NotSupportedException(); public Task<SearchProfileMutationResult> UpdateAsync(OwnerIdentity owner,Guid id,int v,Func<JobSearchProfile,JobSearchProfile> m,CancellationToken ct=default)=>throw new NotSupportedException(); public Task<SearchProfileMutationResult> DeleteAsync(OwnerIdentity owner,int v,Guid id,CancellationToken ct=default)=>throw new NotSupportedException(); }
 }
