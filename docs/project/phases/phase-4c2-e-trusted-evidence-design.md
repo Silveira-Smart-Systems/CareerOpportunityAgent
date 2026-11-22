@@ -308,3 +308,20 @@ These are **logical boundaries**, not a requirement for five deployable microser
 Request one architecture decision covering (a) authority ownership and initial evidence classes, (b) revocation-after-reservation policy, and (c) durable consistency mechanism selection or a bounded proof-of-concept decision. Do not describe green documentation CI as proof of these production properties.
 
 **Current outcome:** documentation is ready for a structured architecture review; P0 is **not signed off**, and all runtime/merge/deployment restrictions remain.
+
+
+## coa-004 — Human decision record: conceptual P0 direction
+
+**Decision:** Conceptual architectural direction approved by the product owner in the COA conversation on 2026-11-22, following presentation of the P0 decision register. **Scope: principles and component responsibilities only.**
+
+Approved conceptual direction:
+- Maintain provider-supplied observations separate from trusted, authority-owned evidence.
+- Apply fail-closed, exact-scope authorization and versioned revocation checks.
+- Separate logical evidence verification, gate authorization, adapter execution, reconciliation and governance/audit responsibilities; no mandate for separate deployable services.
+- Treat post-reservation revocation and uncertain execution conservatively, subject to final operational semantics and proofs.
+- Require durable and correctly ordered distributed reservations before any production claim or rollout.
+- Prepare design contracts and task breakdown as **documentation only**, pending distinct implementation authorization.
+
+**Not approved by this decision:** concrete authority owner/issuer classes, licensing or legal determinations, database or consistency protocol, reconciliation SLA, audit retention/access taxonomy, runtime code, provider activation, PR merge or deployment.
+
+**Gate:** Conceptual direction = approved; detailed P0 operational/implementation readiness = pending. CI #134 succeeded for prior commit `a945ee6`; any subsequent commit requires its own validation. A green documentation CI is not evidence of distributed safety.
