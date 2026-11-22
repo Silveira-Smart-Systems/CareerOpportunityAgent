@@ -34,6 +34,27 @@ public sealed class ScopedDiscoveryOrchestratorTests
     }
 
     [Fact]
+    public async Task Unconstrained_scope_preserves_observed_country_without_conflict_diagnostic()
+    {
+        var permit = new StubPermit(Target());
+        var claim = new ScopedSourceGeographyClaim(
+            new ObservedPublicationGeography.Countries([new CountryCode("ES")]));
+        var adapter = new StubAdapter((request, _) => Task.FromResult(
+            new ScopedSourceSearchResult(
+                [new ScopedSourceOpportunityCandidate(
+                    new ScopedSourceProvenance(request.Target.SourceId, "external",
+                        new Uri("https://example.org/job/1"), request.Target.Scope, DateTimeOffset.UtcNow)
+                    { GeographyClaim = claim },
+                    new Dictionary<string, SourceObservedValue>())], [])));
+        var outcome = Assert.Single((await Orchestrator(adapter, Granted(permit))
+            .ExecuteAsync(Request(), Plan(), Options())).Sources);
+        Assert.Equal(SourceExecutionStatus.Succeeded, outcome.Status);
+        Assert.Empty(outcome.Diagnostics);
+        Assert.Same(claim, Assert.Single(outcome.Candidates).Provenance.GeographyClaim);
+        Assert.Equal(1, permit.Consumed);
+    }
+
+    [Fact]
     public async Task Wrong_scope_provenance_is_rejected()
     {
         var permit = new StubPermit(Target());
