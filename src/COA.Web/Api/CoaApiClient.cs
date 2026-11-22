@@ -13,6 +13,13 @@ public sealed record OpportunityImportRequest(string Url, string Title, string D
 public sealed record OpportunityImportResult(Opportunity Opportunity, MatchAssessment Assessment);
 
 public sealed record ScoredOpportunity(Opportunity Opportunity, MatchAssessment Assessment);
+public sealed record CareerProfileDto(Guid Id, int Version, string Headline, IReadOnlyList<ProfileEvidenceDto> Evidence, CareerPreferencesDto Preferences);
+public sealed record ProfileEvidenceDto(string Claim, string SourceReference, string Origin);
+public sealed record CareerPreferencesDto(string PreferredArrangement, bool RemoteOnly, decimal? MinimumHourlyRate, string? Currency, int? MaximumOfficeDaysPerWeek);
+public sealed record CareerProfileRequest(string Headline, IReadOnlyList<ProfileEvidenceDto> Evidence, CareerPreferencesDto Preferences, int? ExpectedVersion = null);
+public sealed record SearchProfileDto(Guid Id, int Version, string Name, bool IsActive, SearchPreferencesDto Preferences);
+public sealed record SearchPreferencesDto(IReadOnlyList<string> Categories, IReadOnlyList<string> TargetRoles, IReadOnlyList<string> WorkModes, IReadOnlyList<string> SourceMarkets, string? RemoteFromCountry, IReadOnlyList<string> EmploymentTypes, IReadOnlyList<string> Languages, IReadOnlyList<string> Skills, IReadOnlyList<string> ExcludedKeywords, IReadOnlyList<string> MandatoryCriteria, IReadOnlyList<string> PreferredCriteria);
+public sealed record SearchProfileRequest(string Name, SearchPreferencesDto Preferences, int? ExpectedVersion = null);
 
 /// <summary>
 /// Server-side client for the COA API, authenticated with the current user's OIDC access token.
@@ -42,6 +49,43 @@ public sealed class CoaApiClient(HttpClient httpClient, IHttpContextAccessor htt
 
         return await response.Content.ReadFromJsonAsync<OpportunityImportResult>(cancellationToken)
             ?? throw new CoaApiRequestException(response.StatusCode, "The COA API returned an empty response.");
+    }
+
+    public async Task<CareerProfileDto?> GetProfileAsync(CancellationToken cancellationToken = default)
+    {
+        using var request = await CreateRequestAsync(HttpMethod.Get, "api/profile", cancellationToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<CareerProfileDto>(cancellationToken);
+    }
+
+    public async Task<CareerProfileDto> SaveProfileAsync(CareerProfileRequest profile, bool exists, CancellationToken cancellationToken = default)
+    {
+        using var request = await CreateRequestAsync(exists ? HttpMethod.Put : HttpMethod.Post, "api/profile", cancellationToken);
+        request.Content = exists
+            ? JsonContent.Create(new { expectedVersion = profile.ExpectedVersion, profile.Headline, profile.Evidence, profile.Preferences })
+            : JsonContent.Create(new { profile.Headline, profile.Evidence, profile.Preferences });
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<CareerProfileDto>(cancellationToken) ?? throw new CoaApiRequestException(response.StatusCode, "The COA API returned an empty profile.");
+    }
+
+    public async Task<IReadOnlyList<SearchProfileDto>> GetSearchProfilesAsync(CancellationToken cancellationToken = default)
+    {
+        using var request = await CreateRequestAsync(HttpMethod.Get, "api/search-profiles", cancellationToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<List<SearchProfileDto>>(cancellationToken) ?? [];
+    }
+
+    public async Task<SearchProfileDto> CreateSearchProfileAsync(SearchProfileRequest profile, CancellationToken cancellationToken = default)
+    {
+        using var request = await CreateRequestAsync(HttpMethod.Post, "api/search-profiles", cancellationToken);
+        request.Content = JsonContent.Create(new { profile.Name, profile.Preferences });
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<SearchProfileDto>(cancellationToken) ?? throw new CoaApiRequestException(response.StatusCode, "The COA API returned an empty search profile.");
     }
 
     private async Task<HttpRequestMessage> CreateRequestAsync(
