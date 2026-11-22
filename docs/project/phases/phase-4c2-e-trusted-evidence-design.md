@@ -266,3 +266,45 @@ These are **logical boundaries**, not a requirement for five deployable microser
 - Audit events contain actor, decision, opaque evidence reference, version and reason without secrets.
 
 **Delivery boundary:** proposed ownership and tests only. No new service, persistence, provider activation, implementation, merge or deploy authorized.
+
+
+## coa-004 — P0 architecture decision register and readiness gate
+
+**Status:** Consolidated review proposal; no final architecture approval. This register separates mandatory safety properties, recommended MVP direction and decisions requiring human ownership.
+
+| ID | Topic | Required invariant / boundary | MVP recommendation | Approval status |
+| --- | --- | --- | --- | --- |
+| P0-01 | Trust | Provider data and requested plan never authorize; exact typed source/scope | Internal verifier interface and versioned evidence records | Invariant documented; owner/procedure open |
+| P0-02 | Revocation | Fail closed on stale, missing, revoked or unavailable evidence; no check-then-reserve race | Linearizable authorization boundary, using transaction or proven fencing | Property proposed; backend/proof open |
+| P0-03 | Post-reservation revocation | No new start after earlier committed revocation; no unsafe release for uncertain start | Fenced start transition; conservative settlement | Proposed policy; owner sign-off open |
+| P0-04 | Roles | Issuer, gate, adapter and reconciliation cannot self-authorize | Modular boundaries with least-privilege writes; no premature microservices | Logical design proposed; actual owners open |
+| P0-05 | Capacity | At most one grant for final shared slot; idempotent permit accounting | Durable compare-and-reserve in later dedicated workstream | Production implementation deferred |
+| P0-06 | Audit | Safe reason codes and trace without sensitive payloads | Opaque evidence/version refs and actor/attempt audit trail | Retention/access/taxonomy open |
+| P0-07 | Compatibility | Existing scoped interfaces and legacy behavior remain intact | Additive contracts and explicit versioning | Regression tests required |
+| P0-08 | Rollout | No provider activation or distributed claims before proof and review | Test/reference gate only in current scope | Explicitly blocked |
+
+### Recommended MVP implementation sequencing (requires separate approval)
+
+1. **Contract-only increment:** typed evidence subject and states, verifier interface, safe reason taxonomy and negative unit tests; no provider integration.
+2. **Gate policy increment:** authority-backed decision path, revocation/freshness denial, permit and attempt state contracts, backward compatibility tests; no production activation.
+3. **Distributed readiness increment:** durable reservation backend, fencing/linearization proof, crash reconciliation, multi-worker concurrency tests and operational audit; separately reviewed.
+4. **Operational readiness:** named owners, approved evidence classes and licensing policy, retention/access controls, runbooks, load/failure tests and explicit release authorization.
+
+### Architecture sign-off checklist
+
+- [x] Trust boundary, exact typed scope and fail-closed principles documented
+- [x] Proposed revocation/reservation ordering and alternative mechanisms documented
+- [x] Proposed post-reservation/start policy and crash-accounting invariants documented
+- [x] Logical ownership and permission boundaries proposed
+- [x] Negative, race, idempotency and audit test requirements documented
+- [ ] Product/security owner confirms eligible evidence classes, verifier authority and licensing policy
+- [ ] Architecture owner approves revocation semantics and consistency proof approach
+- [ ] Technical owner selects durable store, recovery protocol and multi-instance acceptance tests
+- [ ] Governance owner approves retention, access, incident escalation and denial taxonomy
+- [ ] Explicit approval for any implementation, PR merge or deployment
+
+### Recommendation for next human checkpoint
+
+Request one architecture decision covering (a) authority ownership and initial evidence classes, (b) revocation-after-reservation policy, and (c) durable consistency mechanism selection or a bounded proof-of-concept decision. Do not describe green documentation CI as proof of these production properties.
+
+**Current outcome:** documentation is ready for a structured architecture review; P0 is **not signed off**, and all runtime/merge/deployment restrictions remain.
