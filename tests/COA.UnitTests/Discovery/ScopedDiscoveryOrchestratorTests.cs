@@ -34,6 +34,63 @@ public sealed class ScopedDiscoveryOrchestratorTests
     }
 
     [Fact]
+    public async Task Unconstrained_scope_preserves_observed_country_without_conflict_diagnostic()
+    {
+        var permit = new StubPermit(Target());
+        var claim = new ScopedSourceGeographyClaim(
+            new ObservedPublicationGeography.Countries([new CountryCode("ES")]));
+        var adapter = new StubAdapter((request, _) => Task.FromResult(
+            new ScopedSourceSearchResult(
+                [new ScopedSourceOpportunityCandidate(
+                    new ScopedSourceProvenance(request.Target.SourceId, "external",
+                        new Uri("https://example.org/job/1"), request.Target.Scope, DateTimeOffset.UtcNow)
+                    { GeographyClaim = claim },
+                    new Dictionary<string, SourceObservedValue>())], [])));
+        var outcome = Assert.Single((await Orchestrator(adapter, Granted(permit))
+            .ExecuteAsync(Request(), Plan(), Options())).Sources);
+        Assert.Equal(SourceExecutionStatus.Succeeded, outcome.Status);
+        Assert.Empty(outcome.Diagnostics);
+        Assert.Same(claim, Assert.Single(outcome.Candidates).Provenance.GeographyClaim);
+        Assert.Equal(1, permit.Consumed);
+    }
+
+    [Fact]
+    public async Task Conflicting_observed_country_is_diagnosed_and_original_claim_preserved()
+    {
+        var target = new ScopedSourceExecutionTarget(
+            new SourceId("provider"),
+            new SourceExecutionScope.PublicationCountry(new CountryCode("PT")));
+        var request = new ScopedDiscoveryPlanningRequest(
+            new SearchRequest([new CountryCode("PT")], [], [], [], null, [], []),
+            new DiscoveryGeographyIntent(
+                PublicationMarketIntent.KnownCountries([new CountryCode("PT")]), []));
+        var plan = new ScopedDiscoveryPlan(
+            [new ScopedPlannedTarget(target, [ScopedSourcePlanReason.Eligible], [])]);
+        var permit = new StubPermit(target);
+        var claim = new ScopedSourceGeographyClaim(
+            new ObservedPublicationGeography.Countries([new CountryCode("ES")]),
+            "publication_country");
+        var adapter = new StubAdapter((execution, _) => Task.FromResult(
+            new ScopedSourceSearchResult(
+                [new ScopedSourceOpportunityCandidate(
+                    new ScopedSourceProvenance(execution.Target.SourceId, "job-es-1",
+                        new Uri("https://example.org/job/es-1"), execution.Target.Scope,
+                        DateTimeOffset.UtcNow) { GeographyClaim = claim },
+                    new Dictionary<string, SourceObservedValue>())], [])));
+
+        var outcome = Assert.Single((await Orchestrator(adapter, Granted(permit))
+            .ExecuteAsync(request, plan, Options())).Sources);
+
+        Assert.Equal(SourceExecutionStatus.Succeeded, outcome.Status);
+        var diagnostic = Assert.Single(outcome.Diagnostics);
+        Assert.Equal("ObservedGeographyConflict", diagnostic.Code);
+        Assert.Equal("job-es-1", diagnostic.ExternalId);
+        Assert.Same(claim, Assert.Single(outcome.Candidates).Provenance.GeographyClaim);
+        Assert.Equal(target.Scope, Assert.Single(outcome.Candidates).Provenance.RequestedScope);
+        Assert.Equal(1, permit.Consumed);
+    }
+
+    [Fact]
     public async Task Wrong_scope_provenance_is_rejected()
     {
         var permit = new StubPermit(Target());
