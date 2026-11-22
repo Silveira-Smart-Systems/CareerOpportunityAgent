@@ -106,7 +106,11 @@ public sealed record ScopedSourceSearchResult(
     IReadOnlyList<ScopedSourceOpportunityCandidate> Candidates, IReadOnlyList<AppliedCriterion> AppliedCriteria);
 
 public sealed record ScopedSourceExecutionDiagnostic(
-    ScopedSourceExecutionTarget Target, string Code);
+    ScopedSourceExecutionTarget Target, string Code)
+{
+    /// <summary>Optional source candidate identifier for per-candidate diagnostics.</summary>
+    public string? ExternalId { get; init; }
+}
 
 public sealed record ScopedSourceExecutionOutcome(
     ScopedSourceExecutionTarget Target, SourceExecutionStatus Status,
