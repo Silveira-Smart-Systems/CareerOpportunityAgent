@@ -9,8 +9,8 @@
 @if (loading) { <p role="status">Loading search preferences…</p> }
 else {
  @if (!string.IsNullOrEmpty(error)) { <p role="alert">@error</p> }
- @if (profiles.Count == 0) { <p>No search profile exists yet.</p> } else { <ul>@foreach(var item in profiles) { <li>@item.Name (@(item.IsActive ? "active" : "inactive")) — @string.Join(", ", item.Preferences.TargetRoles)</li> }</ul> }
- <EditForm Model="form" OnValidSubmit="CreateAsync"><DataAnnotationsValidator /><ValidationSummary />
+ @if (profiles.Count == 0) { <p>No search profile exists yet.</p> } else { <ul>@foreach(var item in profiles) { <li>@item.Name (@(item.IsActive ? "active — drives matching" : "inactive")) — @string.Join(", ", item.Preferences.TargetRoles) <button @onclick="()=>Edit(item)">Edit</button> <button @onclick="async ()=>{await Api.SetSearchProfileActiveAsync(item,!item.IsActive);await LoadAsync();}">@(item.IsActive?"Deactivate":"Activate")</button></li> }</ul> }
+ <EditForm Model="form" OnValidSubmit="SaveAsync"><DataAnnotationsValidator /><ValidationSummary />
   <label>Name <InputText @bind-Value="form.Name" /></label><label>Category <InputText @bind-Value="form.Category" /></label><label>Target role <InputText @bind-Value="form.Role" /></label><label>Market (ISO country) <InputText @bind-Value="form.Market" /></label><button type="submit">Add search profile</button>
  </EditForm>
 }
@@ -19,6 +19,7 @@ else {
  private IReadOnlyList<SearchProfileDto> profiles=[]; private bool loading=true; private string? error; private Form form=new();
  protected override async Task OnInitializedAsync(){ await LoadAsync(); }
  private async Task LoadAsync(){ try { profiles=await Api.GetSearchProfilesAsync(); } catch { error="Search preferences could not be loaded."; } finally { loading=false; } }
- private async Task CreateAsync(){ try { var p=new SearchPreferencesDto([form.Category],[form.Role],["remote"],[form.Market],null,[],[],[],[],[],[]); await Api.CreateSearchProfileAsync(new(form.Name,p)); form=new(); await LoadAsync(); } catch { error="Search preferences could not be saved. Use a two-letter market code."; } }
+ private Guid? editing; private async Task SaveAsync(){ try { var p=new SearchPreferencesDto([form.Category],[form.Role],["remote"],[form.Market],null,[],[],[],[],[],[]); if(editing is Guid id){var current=profiles.Single(x=>x.Id==id);await Api.UpdateSearchProfileAsync(id,new(form.Name,p,current.Version));}else await Api.CreateSearchProfileAsync(new(form.Name,p)); form=new();editing=null;await LoadAsync(); } catch { error="Search preferences could not be saved. Use a two-letter market code."; } }
+ private void Edit(SearchProfileDto item){editing=item.Id;form=new(){Name=item.Name,Category=item.Preferences.Categories.FirstOrDefault()??"",Role=item.Preferences.TargetRoles.FirstOrDefault()??"",Market=item.Preferences.SourceMarkets.FirstOrDefault()??"PT"};}
  private sealed class Form { [System.ComponentModel.DataAnnotations.Required] public string Name {get;set;}=""; [System.ComponentModel.DataAnnotations.Required] public string Category {get;set;}=""; [System.ComponentModel.DataAnnotations.Required] public string Role {get;set;}=""; [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(2,MinimumLength=2)] public string Market {get;set;}="PT"; }
 }

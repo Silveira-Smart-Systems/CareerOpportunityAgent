@@ -21,6 +21,6 @@ else {
 @code {
     private CareerProfileDto? profile; private bool loading = true; private string? error; private Form form = new();
     protected override async Task OnInitializedAsync() { try { profile = await Api.GetProfileAsync(); if (profile is not null) form = new() { Headline = profile.Headline, RemoteOnly = profile.Preferences.RemoteOnly }; } catch { error = "The profile could not be loaded."; } finally { loading = false; } }
-    private async Task SaveAsync() { try { profile = await Api.SaveProfileAsync(new(form.Headline, [], new("remote", form.RemoteOnly, null, null, form.RemoteOnly ? 0 : null), profile?.Version), profile is not null); } catch { error = "The profile could not be saved. Check the values and try again."; } }
+    private async Task SaveAsync() { try { var existing = profile?.Preferences; var preferences = new CareerPreferencesDto(form.RemoteOnly ? "remote" : existing?.PreferredArrangement ?? "remote", form.RemoteOnly, existing?.MinimumHourlyRate, existing?.Currency, form.RemoteOnly ? 0 : existing?.MaximumOfficeDaysPerWeek); profile = await Api.SaveProfileAsync(new(form.Headline, profile?.Evidence ?? [], preferences, profile?.Version), profile is not null); } catch { error = "The profile could not be saved. Check the values and try again."; } }
     private sealed class Form { [System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(200)] public string Headline { get; set; } = string.Empty; public bool RemoteOnly { get; set; } = true; }
 }
