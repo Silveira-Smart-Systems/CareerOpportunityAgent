@@ -206,3 +206,63 @@ Outstanding architecture decisions: trusted verifier ownership and eligible evid
 - What retention, access and incident escalation policies govern reconciliation records?
 
 The recommended behavior is a **design proposal**, not a production guarantee, and does not authorize runtime changes, merges, deployment or provider activation.
+
+
+## coa-004 — ADR candidate: evidence authority and reconciliation ownership
+
+**Status: Proposed; organizational ownership, infrastructure and implementation are not approved.**
+
+### Proposed separation of responsibilities
+
+| Responsibility | Logical owner | Allowed actions | Prohibited actions |
+| --- | --- | --- | --- |
+| Evidence verification | Internal evidence authority / verifier | Register independently checked evidence; issue immutable evidence versions; revoke or expire verification; record issuer and provenance of verification | Accept provider-supplied `verified` or geography as authorization; reserve execution budget |
+| Execution authorization | Scoped gate / policy decision service | Validate exact target and current authority version; evaluate license, health, budget, quota, capacity; atomically authorize/reserve attempt | Change verification status; accept a planning-time decision as permission |
+| Execution | Orchestrator and source adapter | Use only a valid single-use permit; transition attempt to started before adapter invocation; emit observations | Grant or renew own permit; write trusted evidence or override revocation |
+| Reconciliation | Internal attempt-accounting authority | Settle ambiguous/crashed attempts from durable state and auditable evidence; authorize release only on proven non-start | Assume a timeout means non-execution; silently replay or release uncertain permits |
+| Governance and audit | Designated product/security/data owners (to be named) | Approve eligible evidence classes, issuer trust, licensing policy, retention, access and escalation | Delegate trust decisions to unreviewed provider metadata |
+
+These are **logical boundaries**, not a requirement for five deployable microservices. One process may host multiple roles only with explicit authorization controls and independent write permissions.
+
+### Evidence classes and provenance of verification
+
+- **Provider observations** (country claim, URL, external ID, free text) are never authority-issued evidence.
+- **Internally verified source eligibility** may become authority-owned evidence only after a defined, auditable verification procedure with named issuer, exact typed scope, verification timestamp, expiry, version and revocation capability.
+- **Licensing/terms permission** requires a separately owned policy determination; a valid source identity or geography claim alone never establishes legal rights.
+- **Operational readiness** (health, capacity, budget, quota) is current gate policy state, not durable proof of provider eligibility.
+- Unknown evidence classes and untrusted issuers fail closed until explicitly approved.
+
+### Authority write and read boundaries
+
+- Providers and adapters have read-only or no access to trusted verification; they must not create, mutate or revoke authority records.
+- Only designated verifier identities may issue or revoke evidence; changes are versioned, authenticated and audited.
+- The gate has authoritative read/evaluate rights and reservation rights, not evidence-issuance rights.
+- Reconciliation has narrowly scoped settlement rights and must preserve append-only audit lineage. No manual release without proof of non-start and recorded actor/rationale.
+- The eventual production protocol must provide an ordering guarantee between revocation, authorization and start transitions; ownership separation must not introduce an unchecked distributed race.
+
+### Reconciliation policy proposal
+
+1. A durable attempt record identifies permit, typed target, evidence version, authorization epoch, state and safe correlation ID.
+2. If non-start is proven by authoritative durable transition history, release exactly once.
+3. If `Started` is recorded or start status is uncertain, do not release or retry the permit; hold or consume conservatively according to approved accounting rules.
+4. Escalate ambiguous records through a bounded, auditable workflow with least-privilege reviewer access. Do not claim that an external provider did not execute solely because it timed out.
+5. New attempts must always reauthorize using current evidence and policy.
+
+### Explicit decisions required from product/architecture owners
+
+1. Name the real owner(s) of verifier, authorization policy and reconciliation; decide if these are modules or separate services.
+2. Approve the initial eligible evidence classes, verification procedure, issuer trust and revocation triggers.
+3. Choose the authoritative durable store/protocol and define cross-role transaction/fencing guarantees.
+4. Specify operational escalation, reconciliation SLA, retention, access controls and incident handling.
+5. Approve the final denial-reason taxonomy and any compatibility mapping.
+
+### Test obligations
+
+- Provider and adapter identities cannot issue or alter verified evidence.
+- An issuer with insufficient privilege cannot verify/revoke another authority's record.
+- Gate denies unknown class, untrusted issuer, stale version, missing revocation proof and unavailable authority.
+- Reconciliation cannot release an attempt with uncertain or recorded start; duplicate settlement is idempotent.
+- Revocation/authorization/start interleavings remain correctly ordered across roles and workers.
+- Audit events contain actor, decision, opaque evidence reference, version and reason without secrets.
+
+**Delivery boundary:** proposed ownership and tests only. No new service, persistence, provider activation, implementation, merge or deploy authorized.
