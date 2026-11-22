@@ -98,7 +98,15 @@ public sealed class ScopedDiscoveryOrchestrator(
                     }
                     result = await searchTask;
                 }
-                catch (OperationCanceledException) when (callerToken.IsCancellationRequested) { throw; }
+                catch (OperationCanceledException) when (callerToken.IsCancellationRequested)
+                {
+                    if (!searchTask.IsCompleted)
+                    {
+                        releaseSlot = false;
+                        lateOperations.Add(ObserveLateAsync(searchTask, limiter));
+                    }
+                    throw;
+                }
                 catch (OperationCanceledException) when (timeout.IsCancellationRequested)
                 {
                     if (!searchTask.IsCompleted)
