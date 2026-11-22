@@ -23,12 +23,12 @@ Não é uma transcrição de conversas.
 
 ## Último checkpoint e próxima sessão
 
-Último checkpoint concluído: [coa-002 — Discovery geography](sessions/coa-002-discovery-geography.md).
-Sessão em curso: [coa-003 — Discovery Execution](sessions/coa-003-discovery-execution.md).
-A arquitetura Phase 4C.2 foi aprovada e a [issue #67](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/issues/67) criada;
-**apenas documentação e issues foram autorizadas, não a implementação**.
-[#47](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/issues/47) continua
-fora do âmbito e Jobicy permanece desativado.
+Último checkpoint concluído: [coa-003 — Discovery Execution](sessions/coa-003-discovery-execution.md).
+Sessão em curso: nenhuma; próxima sessão sequencial a iniciar: `coa-004`.
+Os Draft PRs [#73](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/pull/73) e
+[#75](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/pull/75)
+não têm merge autorizado. A [issue #74](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/issues/74)
+regista as dependências da Phase 4C.2-E. Confirmar o CI mais recente no GitHub.
 
 ## Registos
 
@@ -36,7 +36,7 @@ fora do âmbito e Jobicy permanece desativado.
 | --- | --- | --- | --- |
 | [coa-001](sessions/coa-001-foundation.md) | 19--21 Nov 2026 | histórico | [#45](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/issues/45), [#46](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/issues/46), [ADR-0013](../architecture/adr/0013-multi-source-opportunity-discovery.md) |
 | [coa-002](sessions/coa-002-discovery-geography.md) | 21--22 Nov 2026 | checkpoint | [#62](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/issues/62), [#63](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/issues/63), [PR #64](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/pull/64), [ADR-0014](../architecture/adr/0014-discovery-geographic-semantics.md) |
-| [coa-003](sessions/coa-003-discovery-execution.md) | 22 Nov 2026-- | em curso; arquitetura aprovada, implementação bloqueada | [#67](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/issues/67), [#62](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/issues/62), [ADR-0013](../architecture/adr/0013-multi-source-opportunity-discovery.md), [ADR-0014](../architecture/adr/0014-discovery-geographic-semantics.md) |
+| [coa-003](sessions/coa-003-discovery-execution.md) | 22 Nov 2026 | checkpoint concluído; handoff para coa-004 | [#67](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/issues/67), [#62](https://github.com/Silveira-Smart-Systems/CareerOpportunityAgent/issues/62), [ADR-0013](../architecture/adr/0013-multi-source-opportunity-discovery.md), [ADR-0014](../architecture/adr/0014-discovery-geographic-semantics.md) |
 
 ## Como retomar
 
@@ -47,7 +47,11 @@ fora do âmbito e Jobicy permanece desativado.
 
 ## Handoff para nova conversa
 
-Copiar para uma nova conversa: "Começar por
-`docs/project/conversation-index.md` e pelo último checkpoint `coa-002` e pela sessão em curso `coa-003`; consultar as
-issues, PRs e ADRs canónicos ligados e confirmar o estado atual no GitHub antes de
-propor trabalho. Não assumir acesso ao histórico integral desta conversa."
+Copiar para uma nova conversa: "Retomar COA a partir de
+`docs/project/conversation-index.md` e do checkpoint
+`docs/project/sessions/coa-003-discovery-execution.md`. Consultar issues #67,
+#72, #74 e Draft PRs #73 e #75; verificar estado atual e CI no GitHub.
+Ao iniciar a nova sessão, atribuir o próximo ID sequencial `coa-004` e criar
+o respetivo registo. Prioridade: revisão P0 de evidência confiável e autorização
+fail-closed no PR #75. Não presumir aprovação de merge/deploy; GitHub é a fonte
+única de verdade."
