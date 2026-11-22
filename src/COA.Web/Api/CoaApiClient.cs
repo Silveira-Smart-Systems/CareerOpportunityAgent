@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using COA.Domain.Matching;
@@ -26,13 +28,17 @@ public sealed record SearchProfileRequest(string Name, SearchPreferencesDto Pref
 /// </summary>
 public sealed class CoaApiClient(HttpClient httpClient, IHttpContextAccessor httpContextAccessor)
 {
+    private static readonly JsonSerializerOptions ApiJsonOptions = new(JsonSerializerDefaults.Web)
+    {
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false) }
+    };
     public async Task<IReadOnlyList<ScoredOpportunity>> GetOpportunitiesAsync(CancellationToken cancellationToken = default)
     {
         using var request = await CreateRequestAsync(HttpMethod.Get, "api/opportunities", cancellationToken);
         using var response = await httpClient.SendAsync(request, cancellationToken);
 
         await EnsureSuccessAsync(response, cancellationToken);
-        return await response.Content.ReadFromJsonAsync<List<ScoredOpportunity>>(cancellationToken) ?? [];
+        return await response.Content.ReadFromJsonAsync<List<ScoredOpportunity>>(ApiJsonOptions, cancellationToken) ?? [];
     }
 
     public async Task<OpportunityImportResult> ImportOpportunityAsync(
@@ -47,7 +53,7 @@ public sealed class CoaApiClient(HttpClient httpClient, IHttpContextAccessor htt
         using var response = await httpClient.SendAsync(request, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
 
-        return await response.Content.ReadFromJsonAsync<OpportunityImportResult>(cancellationToken)
+        return await response.Content.ReadFromJsonAsync<OpportunityImportResult>(ApiJsonOptions, cancellationToken)
             ?? throw new CoaApiRequestException(response.StatusCode, "The COA API returned an empty response.");
     }
     public async Task<ScoredOpportunity?> GetOpportunityAsync(Guid id, CancellationToken cancellationToken = default)
@@ -56,7 +62,7 @@ public sealed class CoaApiClient(HttpClient httpClient, IHttpContextAccessor htt
         using var response = await httpClient.SendAsync(request, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         await EnsureSuccessAsync(response, cancellationToken);
-        return await response.Content.ReadFromJsonAsync<ScoredOpportunity>(cancellationToken);
+        return await response.Content.ReadFromJsonAsync<ScoredOpportunity>(ApiJsonOptions, cancellationToken);
     }
 
     public async Task<CareerProfileDto?> GetProfileAsync(CancellationToken cancellationToken = default)
@@ -65,7 +71,7 @@ public sealed class CoaApiClient(HttpClient httpClient, IHttpContextAccessor htt
         using var response = await httpClient.SendAsync(request, cancellationToken);
         if (response.StatusCode == HttpStatusCode.NotFound) return null;
         await EnsureSuccessAsync(response, cancellationToken);
-        return await response.Content.ReadFromJsonAsync<CareerProfileDto>(cancellationToken);
+        return await response.Content.ReadFromJsonAsync<CareerProfileDto>(ApiJsonOptions, cancellationToken);
     }
 
     public async Task<CareerProfileDto> SaveProfileAsync(CareerProfileRequest profile, bool exists, CancellationToken cancellationToken = default)
@@ -76,7 +82,7 @@ public sealed class CoaApiClient(HttpClient httpClient, IHttpContextAccessor htt
             : JsonContent.Create(new { profile.Headline, profile.Evidence, profile.Preferences });
         using var response = await httpClient.SendAsync(request, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
-        return await response.Content.ReadFromJsonAsync<CareerProfileDto>(cancellationToken) ?? throw new CoaApiRequestException(response.StatusCode, "The COA API returned an empty profile.");
+        return await response.Content.ReadFromJsonAsync<CareerProfileDto>(ApiJsonOptions, cancellationToken) ?? throw new CoaApiRequestException(response.StatusCode, "The COA API returned an empty profile.");
     }
 
     public async Task<IReadOnlyList<SearchProfileDto>> GetSearchProfilesAsync(CancellationToken cancellationToken = default)
@@ -84,7 +90,7 @@ public sealed class CoaApiClient(HttpClient httpClient, IHttpContextAccessor htt
         using var request = await CreateRequestAsync(HttpMethod.Get, "api/search-profiles", cancellationToken);
         using var response = await httpClient.SendAsync(request, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
-        return await response.Content.ReadFromJsonAsync<List<SearchProfileDto>>(cancellationToken) ?? [];
+        return await response.Content.ReadFromJsonAsync<List<SearchProfileDto>>(ApiJsonOptions, cancellationToken) ?? [];
     }
 
     public async Task<SearchProfileDto> CreateSearchProfileAsync(SearchProfileRequest profile, CancellationToken cancellationToken = default)
@@ -93,7 +99,7 @@ public sealed class CoaApiClient(HttpClient httpClient, IHttpContextAccessor htt
         request.Content = JsonContent.Create(new { profile.Name, profile.Preferences });
         using var response = await httpClient.SendAsync(request, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
-        return await response.Content.ReadFromJsonAsync<SearchProfileDto>(cancellationToken) ?? throw new CoaApiRequestException(response.StatusCode, "The COA API returned an empty search profile.");
+        return await response.Content.ReadFromJsonAsync<SearchProfileDto>(ApiJsonOptions, cancellationToken) ?? throw new CoaApiRequestException(response.StatusCode, "The COA API returned an empty search profile.");
     }
     public async Task UpdateSearchProfileAsync(Guid id, SearchProfileRequest profile, CancellationToken cancellationToken = default)
     { using var request=await CreateRequestAsync(HttpMethod.Put,$"api/search-profiles/{id}",cancellationToken); request.Content=JsonContent.Create(new { expectedVersion=profile.ExpectedVersion, profile.Name, profile.Preferences }); using var response=await httpClient.SendAsync(request,cancellationToken); await EnsureSuccessAsync(response,cancellationToken); }
