@@ -61,6 +61,36 @@ public sealed class ApiProfileEndpointsTests(SqlServerFixture fixture) : IClassF
     }
 
     [Fact]
+    public async Task Remote_only_revision_normalizes_office_days_and_preserves_unrelated_profile_data()
+    {
+        using var factory = new ApiProfileFactory(fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        Authorize(client, factory.CreateToken("remote-only-transition"));
+
+        var create = await SendJsonAsync(client, HttpMethod.Post, "/api/profile", HybridProfileJson(expectedVersion: null));
+        var revise = await SendJsonAsync(client, HttpMethod.Put, "/api/profile", ProfileJson("Hybrid engineer", expectedVersion: 1));
+        var historical = await client.GetAsync("/api/profile/versions/1");
+
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, revise.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, historical.StatusCode);
+
+        using var revised = await JsonDocument.ParseAsync(await revise.Content.ReadAsStreamAsync());
+        var revisedPreferences = revised.RootElement.GetProperty("preferences");
+        Assert.Equal(2, revised.RootElement.GetProperty("version").GetInt32());
+        Assert.Equal("synthetic", revised.RootElement.GetProperty("evidence")[0].GetProperty("claim").GetString());
+        Assert.True(revisedPreferences.GetProperty("remoteOnly").GetBoolean());
+        Assert.Equal("remote", revisedPreferences.GetProperty("preferredArrangement").GetString());
+        Assert.Equal(0, revisedPreferences.GetProperty("maximumOfficeDaysPerWeek").GetInt32());
+        Assert.Equal(80.01m, revisedPreferences.GetProperty("minimumHourlyRate").GetDecimal());
+        Assert.Equal("EUR", revisedPreferences.GetProperty("currency").GetString());
+
+        using var original = await JsonDocument.ParseAsync(await historical.Content.ReadAsStreamAsync());
+        Assert.Equal("hybrid", original.RootElement.GetProperty("preferences").GetProperty("preferredArrangement").GetString());
+        Assert.Equal(3, original.RootElement.GetProperty("preferences").GetProperty("maximumOfficeDaysPerWeek").GetInt32());
+    }
+
+    [Fact]
     public async Task Other_owner_and_missing_profile_have_the_same_not_found_response()
     {
         using var factory = new ApiProfileFactory(fixture.ConnectionString);
@@ -209,6 +239,9 @@ public sealed class ApiProfileEndpointsTests(SqlServerFixture fixture) : IClassF
 
     private static string ProfileJson(string headline, int? expectedVersion) =>
         $$"""{"headline":"{{headline}}","evidence":[{"claim":"synthetic","sourceReference":"fixture","origin":"userProvided"}],"preferences":{"preferredArrangement":"remote","remoteOnly":true,"minimumHourlyRate":80.01,"currency":"EUR","maximumOfficeDaysPerWeek":0}{{(expectedVersion.HasValue ? $",\"expectedVersion\":{expectedVersion}" : string.Empty)}}}""";
+
+    private static string HybridProfileJson(int? expectedVersion) =>
+        $$"""{"headline":"Hybrid engineer","evidence":[{"claim":"synthetic","sourceReference":"fixture","origin":"userProvided"}],"preferences":{"preferredArrangement":"hybrid","remoteOnly":false,"minimumHourlyRate":80.01,"currency":"EUR","maximumOfficeDaysPerWeek":3}{{(expectedVersion.HasValue ? $",\"expectedVersion\":{expectedVersion}" : string.Empty)}}}""";
 }
 
 public sealed class ApiProfileFactory : WebApplicationFactory<global::Program>
