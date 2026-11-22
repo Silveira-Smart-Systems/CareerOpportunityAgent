@@ -10,3 +10,4 @@
 - Open Draft PR with issue link, validation evidence and risks. Human approval required for merge, deploy, publishing and job applications.
 - Keep output concise: outcome, files changed, tests, blockers, next human decision. Stop when acceptance criteria are met.
 - For reusable procedures, use on-demand skills in `.agents/skills/`; avoid loading every skill or spawning agents for simple work.
+- For ChatGPT ↔ Codex coordination, read `docs/engineering/agent-handoff-protocol.md` only when receiving or reporting a GitHub-mediated task.
