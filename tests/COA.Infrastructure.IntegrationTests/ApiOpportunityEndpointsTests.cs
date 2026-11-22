@@ -114,6 +114,26 @@ public sealed class ApiOpportunityEndpointsTests(SqlServerFixture fixture) : ICl
         Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Conflict);
     }
 
+    [Fact]
+    public async Task Development_opt_in_seed_requires_authentication_and_is_owner_scoped_and_idempotent()
+    {
+        using var factory = new ApiProfileFactory(fixture.ConnectionString, development: true, enableSyntheticSeed: true);
+        using var anonymous = factory.CreateClient();
+        using var ownerA = factory.CreateClient();
+        using var ownerB = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync("/api/opportunities/seed-synthetic", null)).StatusCode);
+        Authorize(ownerA, factory.CreateToken($"seed-a-{Guid.NewGuid():N}"));
+        Authorize(ownerB, factory.CreateToken($"seed-b-{Guid.NewGuid():N}"));
+
+        Assert.Equal(HttpStatusCode.OK, (await ownerA.PostAsync("/api/opportunities/seed-synthetic", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerA.PostAsync("/api/opportunities/seed-synthetic", null)).StatusCode);
+        var ownerAItems = JsonDocument.Parse(await (await ownerA.GetAsync("/api/opportunities")).Content.ReadAsStringAsync()).RootElement;
+        var ownerBItems = JsonDocument.Parse(await (await ownerB.GetAsync("/api/opportunities")).Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal(2, ownerAItems.GetArrayLength());
+        Assert.Equal(0, ownerBItems.GetArrayLength());
+        Assert.All(ownerAItems.EnumerateArray(), item => Assert.True(item.GetProperty("opportunity").GetProperty("isSynthetic").GetBoolean()));
+    }
+
     private static void Authorize(HttpClient client, string token) =>
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 

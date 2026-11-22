@@ -210,14 +210,18 @@ public sealed class ApiProfileEndpointsTests(SqlServerFixture fixture) : IClassF
 public sealed class ApiProfileFactory : WebApplicationFactory<global::Program>
 {
     private readonly string _connectionString;
+    private readonly bool _development;
+    private readonly bool _enableSyntheticSeed;
     public const string Issuer = "https://issuer.test/";
     public const string Audience = "https://api.coa.test";
     public static readonly RsaSecurityKey SigningKey = new(RSA.Create(2048));
     public static readonly RsaSecurityKey OtherSigningKey = new(RSA.Create(2048));
 
-    public ApiProfileFactory(string connectionString)
+    public ApiProfileFactory(string connectionString, bool development = false, bool enableSyntheticSeed = false)
     {
         _connectionString = connectionString;
+        _development = development;
+        _enableSyntheticSeed = enableSyntheticSeed;
     }
 
     public string CreateToken(string? subject, SecurityKey? signingKey = null, IEnumerable<Claim>? extraClaims = null)
@@ -253,13 +257,14 @@ public sealed class ApiProfileFactory : WebApplicationFactory<global::Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Testing");
+        builder.UseEnvironment(_development ? "Development" : "Testing");
         builder.UseSetting("ConnectionStrings:COA", _connectionString);
         builder.ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Authentication:JwtBearer:Authority"] = Issuer,
             ["Authentication:JwtBearer:Audience"] = Audience,
-            ["ConnectionStrings:COA"] = _connectionString
+            ["ConnectionStrings:COA"] = _connectionString,
+            ["Demo:EnableSyntheticSeed"] = _enableSyntheticSeed.ToString()
         }));
         builder.ConfigureTestServices(services => services.PostConfigure<JwtBearerOptions>(
             JwtBearerDefaults.AuthenticationScheme,
