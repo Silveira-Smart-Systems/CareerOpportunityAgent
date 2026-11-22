@@ -325,3 +325,44 @@ Approved conceptual direction:
 **Not approved by this decision:** concrete authority owner/issuer classes, licensing or legal determinations, database or consistency protocol, reconciliation SLA, audit retention/access taxonomy, runtime code, provider activation, PR merge or deployment.
 
 **Gate:** Conceptual direction = approved; detailed P0 operational/implementation readiness = pending. CI #134 succeeded for prior commit `a945ee6`; any subsequent commit requires its own validation. A green documentation CI is not evidence of distributed safety.
+
+
+## coa-004 — Proposed contract backlog and dependency order (documentation only)
+
+**Status:** Planning approved for documentation; contract names are illustrative and not committed API/schema types. No implementation authorization.
+
+### Proposed contracts
+
+| Contract / boundary | Minimum semantics | Consumer / owner | Acceptance evidence |
+| --- | --- | --- | --- |
+| `EvidenceSubject` | Exact provider/source and typed scope, including non-equivalence of `LegacyMarket(PT)` and `PublicationCountry(PT)` | Internal verifier; gate | Cross-scope negative tests |
+| `VerifiedEvidenceRecord` | Opaque ID, subject, approved class, trusted issuer, version, issued/expiry/revoked status and verification provenance | Authority-owned writes; gate reads | Untrusted issuer, stale/unknown/revoked denial |
+| `EvidenceDecision` | Eligible/ineligible/unknown; safe reason codes; observed version and decision timestamp | Gate | Fail-closed and no provider-controlled authority |
+| `ReservationRequest/Permit` | Exact target, authority/policy version, unique attempt and single-use fenced token; idempotency | Gate / reservation authority | Atomic reservation and concurrent-winner tests |
+| `AttemptLifecycle` | Durable reserved/started/settled/reconciliation-needed transitions; no implicit retry | Executor and reconciliation authority | Crash/replay/race tests |
+| `ReconciliationOutcome` | Proof-backed release or conservative settlement; actor, reason and immutable lineage | Reconciliation authority | Unknown-start never released without proof |
+| `AuthorizationAuditEvent` | Opaque correlation, subject, evidence version, actor, safe reason and transition | Audit governance | Secret redaction and audit consistency tests |
+
+These are logical responsibilities; do not infer separate microservices or a particular storage technology. Do not expose full source content, credentials or provider payloads in authorization/audit events.
+
+### Dependency-first documentation work packages
+
+| Order | Work package | Depends on | Exit criteria (design) |
+| --- | --- | --- | --- |
+| D0 | Approve owner matrix and evidence classes | Conceptual P0 approval | Named owners, issuance/revocation procedure and licensing decision path |
+| D1 | Specify typed evidence and safe decision contracts | D0 | Versioned schemas, invariants, backward-compatibility mapping and negative test cases |
+| D2 | Specify permit/attempt state machine | D1 | Fenced start, idempotency, unknown-start policy and race diagrams |
+| D3 | Evaluate durable authority and reservation consistency options | D1–D2 | Written ordering proof approach, failure model and backend selection decision |
+| D4 | Specify reconciliation, audit and operations | D2–D3 | Evidence-of-non-start standard, safe taxonomy, retention/access, runbooks and escalation |
+| D5 | Prepare implementation issues and rollout gates | D0–D4 | Small scoped acceptance criteria, owners, regression/concurrency matrix and explicit implementation approval |
+
+**Parallelizable documentation:** D1 contract vocabulary and D0 owner discovery may be drafted concurrently, but D1 cannot be finalized before D0; D3 option analysis may begin while D2 is drafted, but cannot be accepted before the state machine is agreed.
+
+### Scope guards and review checkpoints
+
+- Keep PR #75 Draft and use issue #74 as the decision trail; do not create implementation branches from unapproved schemas.
+- PR #73's in-memory gate remains reference/test-only, never production distributed authority.
+- Any provider observation, including Jobicy geography, cannot become verified evidence by copying a claim.
+- No scheduler, ingestion, provider activation, licensing assumption, runtime code, database migration, merge or deploy is authorized.
+- Green CI on a documentation commit verifies the repository checks, not the correctness of production distributed authorization.
+- **Next human decision:** identify authority/governance owners and evidence classes; approve a durable ordering approach or a bounded evaluation plan before implementation.
