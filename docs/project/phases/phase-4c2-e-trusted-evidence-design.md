@@ -414,3 +414,52 @@ Every test report must record the exact commit, environment, backend, test seed,
 6. Explicit human sign-off before merge, provider enablement or deployment.
 
 **Unresolved prerequisites:** D0 named owners and evidence classes, backend consistency proof, audit retention/access, operational reconciliation rules and separate implementation approval.
+
+
+## coa-004 — D0 proposed accountable roles and initial evidence-class registry
+
+**Status: Proposal for product/architecture/governance approval; not a delegation of authority.** Names below are functional roles, not appointed people or provisioned service identities.
+
+### Proposed MVP responsibility assignment
+
+| Role | Accountable decision | Proposed logical boundary | Required approval before activation |
+| --- | --- | --- | --- |
+| Product owner | Eligible sources, scope of discovery and business risk acceptance | Product governance | Names the actual responsible person and approves evidence classes |
+| Evidence policy owner | Trust criteria, accepted issuers, verification procedure, expiry and revocation | Internal evidence-policy module | Product + security/data governance sign-off |
+| Evidence verifier | Performs independent checks and records versioned evidence | Restricted authority writer | Identity, credentials and audit controls approved |
+| Authorization gate owner | Exact-scope policy evaluation, permit reservation and fail-closed behavior | Gate policy module | Architecture owner approves consistency and fencing proof |
+| Reconciliation owner | Resolves uncertain starts and permit accounting | Restricted attempt-ledger workflow | Operations/security owner approves proof, escalation and access |
+| Audit/data governance owner | Event schema, safe reasons, access, retention and deletion | Audit policy boundary | Named privacy/security/data owner approves policy |
+
+One accountable human may hold multiple governance roles initially, but execution identities and write privileges must remain separated. These role labels **do not grant permissions**.
+
+### Proposed initial evidence classes and eligibility
+
+| Candidate class | What it can establish | What it cannot establish | Default status |
+| --- | --- | --- | --- |
+| `VerifiedSourceIdentity` | An independently checked provider/source identity and exact typed target | License to ingest, scrape, republish or call APIs | Candidate; not issuable until procedure approved |
+| `VerifiedScopeApplicability` | Evidence that a defined source-specific policy applies to a typed target | That a provider's self-reported country is true or that all countries are equivalent | Candidate; not issuable until procedure approved |
+| `ApprovedAccessBasis` | A separately reviewed permission basis for a precisely defined operation, source and time window | Broad rights beyond the reviewed operation or future policy changes | Candidate; requires explicit licensing/terms determination |
+| `OperationalReadiness` | Current health/quota/budget signals used by the gate | Trusted legal/identity evidence or durable eligibility | Gate input only; **not** an evidence class |
+| `ProviderClaim` | Untrusted source observation (country, URL, external ID, metadata) | Any authority to execute | Explicitly **excluded** from trusted evidence |
+
+**Default allowlist: empty.** Candidate classes are vocabulary for design review, not permission to activate any provider. No Jobicy, LinkedIn or Upwork source is approved for ingestion by this document. Unknown classes, issuers, scopes, permissions or freshness deny.
+
+### Minimum issuance and revocation procedure (proposed)
+
+1. A named governance owner approves the evidence class, verifier role, source/operation scope, validity window and independent verification method.
+2. An authorized verifier checks evidence from an independently trusted source and records opaque reference, exact typed subject, issuer, procedure version, timestamp, expiry, evidence version and audit actor.
+3. A separate policy determination confirms whether the intended access operation is permitted; identity or geography verification never substitutes for licensing/terms approval.
+4. Changes in verified facts, terms, access status, source identity or expiry trigger authority-owned revocation/version bump. No provider-origin write can extend validity.
+5. Gate denies on absent, stale, unknown, revoked or unprovable-current evidence; attempts already reserved obey the fenced revocation/start policy.
+6. Reconciliation and governance reviews are auditable and least-privilege; uncertain external execution cannot be treated as non-start without authoritative proof.
+
+### D0 approval checklist
+
+- [ ] Appoint named accountable product, evidence-policy, authorization, reconciliation and audit/governance owners.
+- [ ] Approve or reject each proposed evidence class and its independent verification procedure.
+- [ ] Approve a source/operation-specific access-rights review; no general permission is inferred.
+- [ ] Approve issuance/revocation actor separation, validity defaults and audit retention/access.
+- [ ] Record explicit permission to implement contracts in a separately scoped issue/PR.
+
+**Recommendation:** approve this as a *draft D0 ownership model for review*, not as an active authority registry. Do not change the empty allowlist until all D0 checks and a production-readiness gate have been completed.
