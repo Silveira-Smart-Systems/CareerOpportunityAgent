@@ -259,6 +259,9 @@ public sealed class ApiProfileFactory : WebApplicationFactory<global::Program>
     {
         builder.UseEnvironment(_development ? "Development" : "Testing");
         builder.UseSetting("ConnectionStrings:COA", _connectionString);
+        builder.UseSetting("Authentication:JwtBearer:Authority", Issuer);
+        builder.UseSetting("Authentication:JwtBearer:Audience", Audience);
+        builder.UseSetting("Demo:EnableSyntheticSeed", _enableSyntheticSeed.ToString());
         builder.ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Authentication:JwtBearer:Authority"] = Issuer,
