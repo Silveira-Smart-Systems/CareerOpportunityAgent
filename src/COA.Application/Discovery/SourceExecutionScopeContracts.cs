@@ -39,8 +39,11 @@ public abstract record SourceExecutionScope
 }
 
 /// <summary>
-/// Explicit, evidence-backed declaration of a source's ability to execute a scope.
-/// Absence of a declaration means unsupported; it must never imply broad coverage.
+/// Declaration of a source's ability to execute a scope, accompanied by a reference
+/// to supporting evidence. This contract validates only the presence of a reference:
+/// it does NOT verify the evidence or authorize execution. Provider registration must
+/// verify the evidence before declaring support. Absence of a declaration means
+/// unsupported; it must never imply broad coverage.
 /// </summary>
 public sealed record SourceScopeCapability
 {
@@ -57,8 +60,9 @@ public sealed record SourceScopeCapability
 }
 
 /// <summary>
-/// An immutable set of explicit execution scopes. No provider-specific capabilities are
-/// registered by this contract; callers must supply verified evidence separately.
+/// An immutable set of declared execution scopes. Supports() checks membership only;
+/// it does not validate provider evidence, licensing, quota or authorization.
+/// Provider-specific registration must verify evidence before supplying capabilities.
 /// </summary>
 public sealed class SourceScopeCapabilities
 {
@@ -82,7 +86,9 @@ public sealed class SourceScopeCapabilities
 }
 
 /// <summary>
-/// An execution identity. This type is intentionally not wired to the legacy gate until
+/// An execution identity. LegacyMarket and PublicationCountry are deliberately distinct;
+/// callers must not silently convert one to the other or infer unconstrained coverage.
+/// This type is intentionally not wired to the legacy gate until
 /// Planner/Orchestrator/Gate changes and regression tests are reviewed together.
 /// </summary>
 public sealed record ScopedSourceExecutionTarget
