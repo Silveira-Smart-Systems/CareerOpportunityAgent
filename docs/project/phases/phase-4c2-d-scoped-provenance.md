@@ -46,3 +46,15 @@ No provider activation, scheduler, persistence, ingestion, or issue #47. Jobicy 
 2. Implement additive contracts and validation only after design approval.
 3. Run unit tests, CI, and compatibility checks.
 4. Require explicit human approval before merge.
+
+## Implemented conflict policy (Draft PR #73)
+
+- `ScopedGeographyClaimEvaluator` compares observed country claims only when the requested scope is `PublicationCountry`. A matching country in a multi-country claim is a match; a claim containing no requested country is a conflict.
+- A missing or explicitly unknown claim yields `Unknown`, never a fabricated country. `LegacyMarket` and `UnconstrainedPublication` with observed country claims yield `NotComparable`; neither is implicitly converted into a publication-country request.
+- For a conflicting claim, the scoped orchestrator preserves the candidate and its original requested scope and observed claim, returns `Succeeded` for an otherwise valid adapter result, and emits one `ObservedGeographyConflict` diagnostic per conflicting candidate, with the optional `ExternalId`. No silent correction, filtering, authorization, or ingestion follows from the diagnostic.
+- Invalid mandatory provenance (wrong source/scope, blank external ID, unsupported URL, missing UTC retrieval time) remains rejected independently of geography claim assessment. A provider claim is not independently verified geographic evidence.
+- Existing five-argument `ScopedSourceProvenance` construction and two-argument `ScopedSourceExecutionDiagnostic` construction remain supported. No legacy orchestrator behavior is changed.
+
+## Review status and remaining boundaries
+
+The scope/provenance contracts, geography evaluator, scoped outcome diagnostics and regression tests are implemented in the Draft PR. The implementation deliberately does not introduce independent evidence verification, field-level evidence or trace metadata, canonical identity/deduplication, or production-grade distributed authorization. These remain explicit future design concerns, not features inferred from the presence of provenance fields. The PR must remain Draft until review and explicit merge approval.
