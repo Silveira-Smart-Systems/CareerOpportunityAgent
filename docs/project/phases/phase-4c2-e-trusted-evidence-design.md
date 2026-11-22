@@ -507,3 +507,19 @@ For each class, record: exact purpose and typed scope; independently trusted evi
 - No explicit authorization for implementation, PR merge, deployment and provider activation.
 
 **Review outcome sought:** approval or amendment of the **governance direction**, not blanket acceptance of source eligibility or runtime authority. Default evidence allowlist stays empty.
+
+
+## coa-004 — Human decision record: D0 governance direction
+
+**Decision:** The product owner explicitly approved the proposed D0 governance direction in the COA conversation on 2026-11-22, **conceptual and documentation scope only**.
+
+Approved:
+- Modular MVP governance with distinct logical verification, review, authorization, reconciliation and audit responsibilities.
+- Least-privilege separation between verifier and reviewer identities; no self-approval of trusted issuance.
+- Evidence-class activation only after class-specific independent verification, exact typed scope and source/operation-specific permission assessment.
+- Maintain an **empty evidence-class allowlist** and disabled providers until subsequent explicit approvals.
+- Continue documentation, decision analysis and planning; do not implement or operationalize this approval.
+
+**Explicitly not approved:** named authority owners or identities; specific evidence classes/issuers or provider rights; final storage and distributed consistency mechanism; audit retention and operational SLAs; runtime code; provider activation; PR merge; deployment.
+
+**Tracking:** D0 governance direction approved, D0 operational readiness pending. CI #139 was in progress for prior commit `0d3c275` at the time of this record; validate the new commit separately.
