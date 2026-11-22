@@ -43,6 +43,22 @@ public sealed class OpportunityStoreTests(SqlServerFixture fixture) : IClassFixt
         Assert.Single(await fixture.CreateOpportunityStore().ListAsync(owner));
     }
 
+    [Fact]
+    public async Task Synthetic_provenance_round_trips_and_legacy_default_is_false()
+    {
+        var owner = Owner("provenance");
+        var legacy = Opportunity.Create("https://jobs.example.test/legacy", "Legacy", "Synthetic role");
+        var demo = Opportunity.Create("https://jobs.example.test/demo", "Demo", "Synthetic role", isSynthetic: true);
+        var store = fixture.CreateOpportunityStore();
+
+        Assert.True(await store.AddAsync(owner, legacy));
+        Assert.True(await store.AddAsync(owner, demo));
+
+        var persisted = await store.ListAsync(owner);
+        Assert.False(persisted.Single(item => item.Id == legacy.Id).IsSynthetic);
+        Assert.True(persisted.Single(item => item.Id == demo.Id).IsSynthetic);
+    }
+
     private static OwnerIdentity Owner(string suffix) =>
         new("https://issuer.example", $"synthetic-opportunity-{suffix}-{Guid.NewGuid():N}");
 }

@@ -85,10 +85,13 @@ public sealed class ApiOpportunityEndpointsTests(SqlServerFixture fixture) : ICl
         Authorize(ownerA, factory.CreateToken($"opportunity-detail-a-{Guid.NewGuid():N}"));
         Authorize(ownerB, factory.CreateToken($"opportunity-detail-b-{Guid.NewGuid():N}"));
         var create = await SendJsonAsync(ownerA, OpportunityJson("https://jobs.example.test/detail-private", "Private", "Synthetic role"));
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
         var id = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("opportunity").GetProperty("id").GetGuid();
 
+        var ownResponse = await ownerA.GetAsync($"/api/opportunities/{id}");
         var response = await ownerB.GetAsync($"/api/opportunities/{id}");
 
+        Assert.Equal(HttpStatusCode.OK, ownResponse.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
