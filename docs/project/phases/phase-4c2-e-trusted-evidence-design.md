@@ -463,3 +463,47 @@ One accountable human may hold multiple governance roles initially, but executio
 - [ ] Record explicit permission to implement contracts in a separately scoped issue/PR.
 
 **Recommendation:** approve this as a *draft D0 ownership model for review*, not as an active authority registry. Do not change the empty allowlist until all D0 checks and a production-readiness gate have been completed.
+
+
+## coa-004 — D0 governance decision package (for explicit owner review)
+
+**Status: Decision-ready proposal, NOT approved operational governance.** The conceptual P0 approval does not appoint individuals, approve source rights or activate any evidence class.
+
+### Recommended minimal MVP governance model
+
+- **Product accountability:** product owner accepts business scope and prioritizes candidate sources, but cannot unilaterally treat external claims as verified evidence or grant legal access rights.
+- **Evidence policy and verifier:** one internal evidence-policy module with a restricted verifier identity and a separate review/approval identity. For a small MVP the same team may operate both, but self-approval of issuance is prohibited.
+- **Authorization:** a separate gate policy boundary owns decision and reservation; adapters have no authority writes.
+- **Reconciliation:** an internal workflow owns attempt settlement and exceptional release with proof, never provider callbacks alone.
+- **Audit/governance:** a named reviewer approves safe event fields, retention, access and incident escalation; role appointments must be recorded before implementation.
+
+### Decision options and recommendation
+
+| Decision | Option A | Option B | Recommendation |
+| --- | --- | --- | --- |
+| Deployment topology | Modular monolith with isolated authorization boundaries | Separate evidence/gate/reconciliation services | **A** for MVP, unless isolation/scale evidence justifies B |
+| Evidence class activation | Approve all proposed classes now | Approve vocabulary now, activate per class after verification and access-rights review | **B** |
+| Issuance control | Single verifier can self-approve | Distinct verifier and reviewer authority, with audited exceptions | **B** |
+| Consistency backend | Choose database now without proof | Compare transaction/serialization and fencing options against deterministic races before selection | **B** |
+| Provider rollout | Activate once documents pass CI | Keep disabled until licensing, durable authorization, audit and multi-worker tests pass | **B** |
+
+### D0 candidate-class approval rubric
+
+For each class, record: exact purpose and typed scope; independently trusted evidence source; approved issuer/reviewer identities; verification method and version; expiry and revocation trigger; allowed operations; separate terms/licensing determination; safe audit fields; negative tests; and accountable owner. A class without any required field remains **not eligible**. No implicit default validity or wildcard scope.
+
+### Proposed decisions for the product owner
+
+1. **Approve as a direction only:** modular MVP boundaries, least-privilege verifier/reviewer separation and per-class activation after explicit review.
+2. **Defer:** actual named personnel/service identities, final authority storage, legal/terms permission, evidence class allowlist, operational SLAs and implementation.
+3. **Authorize next documentation package only:** D1 schema examples and a comparison of durable consistency options with measurable acceptance criteria.
+
+### Hard release blockers
+
+- No named accountable authority or no approved evidence issuer/reviewer separation.
+- No source-and-operation-specific permission assessment, or evidence class still unapproved.
+- No proven atomic ordering of revocation, reservation and start across workers.
+- No crash-safe accounting, idempotent settlement or auditable recovery procedure.
+- No signed-off audit access/retention and no rollback/feature-disable verification.
+- No explicit authorization for implementation, PR merge, deployment and provider activation.
+
+**Review outcome sought:** approval or amendment of the **governance direction**, not blanket acceptance of source eligibility or runtime authority. Default evidence allowlist stays empty.
