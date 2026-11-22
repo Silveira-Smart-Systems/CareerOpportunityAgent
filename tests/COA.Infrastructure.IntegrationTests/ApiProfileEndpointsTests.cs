@@ -52,8 +52,42 @@ public sealed class ApiProfileEndpointsTests(SqlServerFixture fixture) : IClassF
         Assert.Equal(HttpStatusCode.OK, current.StatusCode);
         Assert.Equal(HttpStatusCode.OK, revise.StatusCode);
         Assert.Equal(HttpStatusCode.OK, historical.StatusCode);
-        Assert.Equal("Architect", (await JsonDocument.ParseAsync(await revise.Content.ReadAsStreamAsync())).RootElement.GetProperty("headline").GetString());
+        var revised = await JsonDocument.ParseAsync(await revise.Content.ReadAsStreamAsync());
+        Assert.Equal("Architect", revised.RootElement.GetProperty("headline").GetString());
         Assert.Equal("Engineer", (await JsonDocument.ParseAsync(await historical.Content.ReadAsStreamAsync())).RootElement.GetProperty("headline").GetString());
+        Assert.Equal("synthetic", revised.RootElement.GetProperty("evidence")[0].GetProperty("claim").GetString());
+        Assert.Equal(80.01m, revised.RootElement.GetProperty("preferences").GetProperty("minimumHourlyRate").GetDecimal());
+        Assert.Equal("EUR", revised.RootElement.GetProperty("preferences").GetProperty("currency").GetString());
+    }
+
+    [Fact]
+    public async Task Remote_only_revision_normalizes_office_days_and_preserves_unrelated_profile_data()
+    {
+        using var factory = new ApiProfileFactory(fixture.ConnectionString);
+        using var client = factory.CreateClient();
+        Authorize(client, factory.CreateToken("remote-only-transition"));
+
+        var create = await SendJsonAsync(client, HttpMethod.Post, "/api/profile", HybridProfileJson(expectedVersion: null));
+        var revise = await SendJsonAsync(client, HttpMethod.Put, "/api/profile", ProfileJson("Hybrid engineer", expectedVersion: 1));
+        var historical = await client.GetAsync("/api/profile/versions/1");
+
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, revise.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, historical.StatusCode);
+
+        using var revised = await JsonDocument.ParseAsync(await revise.Content.ReadAsStreamAsync());
+        var revisedPreferences = revised.RootElement.GetProperty("preferences");
+        Assert.Equal(2, revised.RootElement.GetProperty("version").GetInt32());
+        Assert.Equal("synthetic", revised.RootElement.GetProperty("evidence")[0].GetProperty("claim").GetString());
+        Assert.True(revisedPreferences.GetProperty("remoteOnly").GetBoolean());
+        Assert.Equal("remote", revisedPreferences.GetProperty("preferredArrangement").GetString());
+        Assert.Equal(0, revisedPreferences.GetProperty("maximumOfficeDaysPerWeek").GetInt32());
+        Assert.Equal(80.01m, revisedPreferences.GetProperty("minimumHourlyRate").GetDecimal());
+        Assert.Equal("EUR", revisedPreferences.GetProperty("currency").GetString());
+
+        using var original = await JsonDocument.ParseAsync(await historical.Content.ReadAsStreamAsync());
+        Assert.Equal("hybrid", original.RootElement.GetProperty("preferences").GetProperty("preferredArrangement").GetString());
+        Assert.Equal(3, original.RootElement.GetProperty("preferences").GetProperty("maximumOfficeDaysPerWeek").GetInt32());
     }
 
     [Fact]
@@ -205,19 +239,26 @@ public sealed class ApiProfileEndpointsTests(SqlServerFixture fixture) : IClassF
 
     private static string ProfileJson(string headline, int? expectedVersion) =>
         $$"""{"headline":"{{headline}}","evidence":[{"claim":"synthetic","sourceReference":"fixture","origin":"userProvided"}],"preferences":{"preferredArrangement":"remote","remoteOnly":true,"minimumHourlyRate":80.01,"currency":"EUR","maximumOfficeDaysPerWeek":0}{{(expectedVersion.HasValue ? $",\"expectedVersion\":{expectedVersion}" : string.Empty)}}}""";
+
+    private static string HybridProfileJson(int? expectedVersion) =>
+        $$"""{"headline":"Hybrid engineer","evidence":[{"claim":"synthetic","sourceReference":"fixture","origin":"userProvided"}],"preferences":{"preferredArrangement":"hybrid","remoteOnly":false,"minimumHourlyRate":80.01,"currency":"EUR","maximumOfficeDaysPerWeek":3}{{(expectedVersion.HasValue ? $",\"expectedVersion\":{expectedVersion}" : string.Empty)}}}""";
 }
 
 public sealed class ApiProfileFactory : WebApplicationFactory<global::Program>
 {
     private readonly string _connectionString;
+    private readonly bool _development;
+    private readonly bool _enableSyntheticSeed;
     public const string Issuer = "https://issuer.test/";
     public const string Audience = "https://api.coa.test";
     public static readonly RsaSecurityKey SigningKey = new(RSA.Create(2048));
     public static readonly RsaSecurityKey OtherSigningKey = new(RSA.Create(2048));
 
-    public ApiProfileFactory(string connectionString)
+    public ApiProfileFactory(string connectionString, bool development = false, bool enableSyntheticSeed = false)
     {
         _connectionString = connectionString;
+        _development = development;
+        _enableSyntheticSeed = enableSyntheticSeed;
     }
 
     public string CreateToken(string? subject, SecurityKey? signingKey = null, IEnumerable<Claim>? extraClaims = null)
@@ -253,13 +294,17 @@ public sealed class ApiProfileFactory : WebApplicationFactory<global::Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Testing");
+        builder.UseEnvironment(_development ? "Development" : "Testing");
         builder.UseSetting("ConnectionStrings:COA", _connectionString);
+        builder.UseSetting("Authentication:JwtBearer:Authority", Issuer);
+        builder.UseSetting("Authentication:JwtBearer:Audience", Audience);
+        builder.UseSetting("Demo:EnableSyntheticSeed", _enableSyntheticSeed.ToString());
         builder.ConfigureAppConfiguration(configuration => configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
             ["Authentication:JwtBearer:Authority"] = Issuer,
             ["Authentication:JwtBearer:Audience"] = Audience,
-            ["ConnectionStrings:COA"] = _connectionString
+            ["ConnectionStrings:COA"] = _connectionString,
+            ["Demo:EnableSyntheticSeed"] = _enableSyntheticSeed.ToString()
         }));
         builder.ConfigureTestServices(services => services.PostConfigure<JwtBearerOptions>(
             JwtBearerDefaults.AuthenticationScheme,

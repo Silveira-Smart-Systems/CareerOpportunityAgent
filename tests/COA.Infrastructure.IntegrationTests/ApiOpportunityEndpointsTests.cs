@@ -77,6 +77,25 @@ public sealed class ApiOpportunityEndpointsTests(SqlServerFixture fixture) : ICl
     }
 
     [Fact]
+    public async Task Other_owner_cannot_get_an_opportunity_by_id()
+    {
+        using var factory = new ApiProfileFactory(fixture.ConnectionString);
+        using var ownerA = factory.CreateClient();
+        using var ownerB = factory.CreateClient();
+        Authorize(ownerA, factory.CreateToken($"opportunity-detail-a-{Guid.NewGuid():N}"));
+        Authorize(ownerB, factory.CreateToken($"opportunity-detail-b-{Guid.NewGuid():N}"));
+        var create = await SendJsonAsync(ownerA, OpportunityJson("https://jobs.example.test/detail-private", "Private", "Synthetic role"));
+        Assert.Equal(HttpStatusCode.Created, create.StatusCode);
+        var id = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("opportunity").GetProperty("id").GetGuid();
+
+        var ownResponse = await ownerA.GetAsync($"/api/opportunities/{id}");
+        var response = await ownerB.GetAsync($"/api/opportunities/{id}");
+
+        Assert.Equal(HttpStatusCode.OK, ownResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Concurrent_imports_return_created_and_conflict()
     {
         using var factory = new ApiProfileFactory(fixture.ConnectionString);
@@ -93,6 +112,40 @@ public sealed class ApiOpportunityEndpointsTests(SqlServerFixture fixture) : ICl
 
         Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Created);
         Assert.Single(responses, response => response.StatusCode == HttpStatusCode.Conflict);
+    }
+
+    [Fact]
+    public async Task Development_opt_in_seed_requires_authentication_and_is_owner_scoped_and_idempotent()
+    {
+        using var factory = new ApiProfileFactory(fixture.ConnectionString, development: true, enableSyntheticSeed: true);
+        using var anonymous = factory.CreateClient();
+        using var ownerA = factory.CreateClient();
+        using var ownerB = factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsync("/api/opportunities/seed-synthetic", null)).StatusCode);
+        Authorize(ownerA, factory.CreateToken($"seed-a-{Guid.NewGuid():N}"));
+        Authorize(ownerB, factory.CreateToken($"seed-b-{Guid.NewGuid():N}"));
+
+        Assert.Equal(HttpStatusCode.OK, (await ownerA.PostAsync("/api/opportunities/seed-synthetic", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await ownerA.PostAsync("/api/opportunities/seed-synthetic", null)).StatusCode);
+        var ownerAItems = JsonDocument.Parse(await (await ownerA.GetAsync("/api/opportunities")).Content.ReadAsStringAsync()).RootElement;
+        var ownerBItems = JsonDocument.Parse(await (await ownerB.GetAsync("/api/opportunities")).Content.ReadAsStringAsync()).RootElement;
+        Assert.Equal(2, ownerAItems.GetArrayLength());
+        Assert.Equal(0, ownerBItems.GetArrayLength());
+        Assert.All(ownerAItems.EnumerateArray(), item => Assert.True(item.GetProperty("opportunity").GetProperty("isSynthetic").GetBoolean()));
+    }
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task Synthetic_seed_is_not_mapped_without_development_and_opt_in(bool development, bool enableSyntheticSeed)
+    {
+        using var factory = new ApiProfileFactory(fixture.ConnectionString, development, enableSyntheticSeed);
+        using var client = factory.CreateClient();
+        Authorize(client, factory.CreateToken($"seed-gate-{Guid.NewGuid():N}"));
+
+        var response = await client.PostAsync("/api/opportunities/seed-synthetic", null);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
     }
 
     private static void Authorize(HttpClient client, string token) =>

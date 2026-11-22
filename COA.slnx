@@ -9,5 +9,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/COA.Infrastructure.IntegrationTests/COA.Infrastructure.IntegrationTests.csproj" />
     <Project Path="tests/COA.UnitTests/COA.UnitTests.csproj" />
+    <Project Path="tests/COA.Web.Tests/COA.Web.Tests.csproj" />
   </Folder>
 </Solution>
