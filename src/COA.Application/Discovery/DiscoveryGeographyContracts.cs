@@ -12,12 +12,14 @@ public enum PublicationMarketIntentKind
 /// A search constraint over a publication market. It is intentionally distinct from both
 /// advertised geography and absent/unknown source provenance.
 /// </summary>
-public sealed record PublicationMarketIntent
+public sealed class PublicationMarketIntent
 {
     private PublicationMarketIntent(PublicationMarketIntentKind kind, IEnumerable<CountryCode> countries)
     {
         if (!Enum.IsDefined(kind)) throw new ArgumentException("Publication market intent kind is invalid.", nameof(kind));
-        Countries = (countries ?? throw new ArgumentNullException(nameof(countries))).ToFrozenSet();
+        var copied = (countries ?? throw new ArgumentNullException(nameof(countries))).ToArray();
+        foreach (var country in copied) DiscoveryGeographyValidation.ValidateCountry(country, nameof(countries));
+        Countries = copied.ToFrozenSet();
         if (kind == PublicationMarketIntentKind.Unconstrained && Countries.Count != 0)
             throw new ArgumentException("An unconstrained publication market cannot contain countries.", nameof(countries));
         if (kind == PublicationMarketIntentKind.KnownCountries && Countries.Count == 0)
@@ -40,7 +42,16 @@ public sealed record PublicationMarketIntent
 public abstract record PublicationMarketProvenance
 {
     private PublicationMarketProvenance() { }
-    public sealed record Known(CountryCode Country) : PublicationMarketProvenance;
+    public sealed record Known : PublicationMarketProvenance
+    {
+        public Known(CountryCode country)
+        {
+            DiscoveryGeographyValidation.ValidateCountry(country, nameof(country));
+            Country = country;
+        }
+
+        public CountryCode Country { get; }
+    }
     public sealed record Unknown : PublicationMarketProvenance;
 }
 
@@ -59,7 +70,11 @@ public abstract record AdvertisedGeographicScope
 
     public sealed record Country : AdvertisedGeographicScope
     {
-        public Country(CountryCode value) => Value = value;
+        public Country(CountryCode value)
+        {
+            DiscoveryGeographyValidation.ValidateCountry(value, nameof(value));
+            Value = value;
+        }
         public CountryCode Value { get; }
     }
 
@@ -88,7 +103,7 @@ public enum RemoteWorkEligibility
 /// Evidence of remote-work eligibility is country-specific. A missing country is Unknown, never
 /// an implicit Eligible or NotEligible result.
 /// </summary>
-public sealed record RemoteWorkEligibilityByCountry
+public sealed class RemoteWorkEligibilityByCountry
 {
     private readonly IReadOnlyDictionary<CountryCode, RemoteWorkEligibility> _observations;
 
@@ -97,6 +112,7 @@ public sealed record RemoteWorkEligibilityByCountry
         var copied = (observations ?? throw new ArgumentNullException(nameof(observations))).ToArray();
         if (copied.Any(observation => !Enum.IsDefined(observation.Value)))
             throw new ArgumentException("Remote work eligibility contains an invalid value.", nameof(observations));
+        foreach (var observation in copied) DiscoveryGeographyValidation.ValidateCountry(observation.Key, nameof(observations));
         if (copied.GroupBy(observation => observation.Key).Any(group => group.Select(x => x.Value).Distinct().Count() > 1))
             throw new ArgumentException("A country cannot have conflicting remote work eligibility.", nameof(observations));
         _observations = copied
@@ -106,15 +122,22 @@ public sealed record RemoteWorkEligibilityByCountry
 
     public IReadOnlyDictionary<CountryCode, RemoteWorkEligibility> Observations => _observations;
 
-    public RemoteWorkEligibility For(CountryCode country) =>
-        _observations.GetValueOrDefault(country, RemoteWorkEligibility.Unknown);
+    public RemoteWorkEligibility For(CountryCode country)
+    {
+        DiscoveryGeographyValidation.ValidateCountry(country, nameof(country));
+        return _observations.GetValueOrDefault(country, RemoteWorkEligibility.Unknown);
+    }
+
+    public bool HasSameObservations(RemoteWorkEligibilityByCountry other) => other is not null &&
+        _observations.Count == other._observations.Count &&
+        _observations.All(observation => other._observations.TryGetValue(observation.Key, out var value) && value == observation.Value);
 }
 
 /// <summary>
 /// New, provider-neutral geographic intent. It is deliberately separate from legacy
 /// SearchRequest.SourceMarkets until Planner/Orchestrator are evolved in a later phase.
 /// </summary>
-public sealed record DiscoveryGeographyIntent
+public sealed class DiscoveryGeographyIntent
 {
     public DiscoveryGeographyIntent(PublicationMarketIntent publicationMarket,
         IEnumerable<AdvertisedGeographicScope> advertisedGeographies)
@@ -132,4 +155,14 @@ public sealed record DiscoveryGeographyIntent
     public bool HasSameIntent(DiscoveryGeographyIntent other) => other is not null &&
         PublicationMarket.HasSameIntent(other.PublicationMarket) &&
         AdvertisedGeographies.SetEquals(other.AdvertisedGeographies);
+}
+
+internal static class DiscoveryGeographyValidation
+{
+    internal static void ValidateCountry(CountryCode country, string parameterName)
+    {
+        var value = country.Value;
+        if (string.IsNullOrWhiteSpace(value) || value.Length != 2 || !value.All(char.IsAsciiLetter))
+            throw new ArgumentException("A valid ISO 3166-1 alpha-2 country code is required.", parameterName);
+    }
 }

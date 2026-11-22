@@ -39,6 +39,20 @@ public sealed class DiscoveryGeographyContractsTests
     }
 
     [Fact]
+    public void Default_country_is_rejected_at_every_new_country_boundary()
+    {
+        Assert.Throws<ArgumentException>(() => PublicationMarketIntent.KnownCountries([default(CountryCode)]));
+        Assert.Throws<ArgumentException>(() => new PublicationMarketProvenance.Known(default));
+        Assert.Throws<ArgumentException>(() => new AdvertisedGeographicScope.Country(default));
+        Assert.Throws<ArgumentException>(() => new RemoteWorkEligibilityByCountry([
+            new KeyValuePair<CountryCode, RemoteWorkEligibility>(default, RemoteWorkEligibility.Unknown)
+        ]));
+
+        var eligibility = new RemoteWorkEligibilityByCountry([]);
+        Assert.Throws<ArgumentException>(() => eligibility.For(default));
+    }
+
+    [Fact]
     public void Country_europe_and_anywhere_are_distinct_typed_scopes()
     {
         var country = new AdvertisedGeographicScope.Country(Portugal);
@@ -65,6 +79,17 @@ public sealed class DiscoveryGeographyContractsTests
 
         Assert.True(first.HasSameIntent(same));
         Assert.False(first.HasSameIntent(different));
+        Assert.False(first.Equals(same));
+    }
+
+    [Fact]
+    public void Publication_market_uses_explicit_intent_comparison_not_collection_reference_equality()
+    {
+        var first = PublicationMarketIntent.KnownCountries([Portugal, Brazil]);
+        var same = PublicationMarketIntent.KnownCountries([Brazil, Portugal, Portugal]);
+
+        Assert.True(first.HasSameIntent(same));
+        Assert.False(first.Equals(same));
     }
 
     [Fact]
@@ -92,6 +117,30 @@ public sealed class DiscoveryGeographyContractsTests
         Assert.Throws<ArgumentException>(() => new RemoteWorkEligibilityByCountry([
             new KeyValuePair<CountryCode, RemoteWorkEligibility>(Portugal, (RemoteWorkEligibility)99)
         ]));
+    }
+
+    [Fact]
+    public void Consistent_remote_eligibility_duplicates_are_normalized_and_compared_explicitly()
+    {
+        var first = new RemoteWorkEligibilityByCountry([
+            new KeyValuePair<CountryCode, RemoteWorkEligibility>(Portugal, RemoteWorkEligibility.Eligible),
+            new KeyValuePair<CountryCode, RemoteWorkEligibility>(Portugal, RemoteWorkEligibility.Eligible),
+            new KeyValuePair<CountryCode, RemoteWorkEligibility>(Brazil, RemoteWorkEligibility.Unknown)
+        ]);
+        var same = new RemoteWorkEligibilityByCountry([
+            new KeyValuePair<CountryCode, RemoteWorkEligibility>(Brazil, RemoteWorkEligibility.Unknown),
+            new KeyValuePair<CountryCode, RemoteWorkEligibility>(Portugal, RemoteWorkEligibility.Eligible)
+        ]);
+
+        Assert.Equal(2, first.Observations.Count);
+        Assert.True(first.HasSameObservations(same));
+        Assert.False(first.Equals(same));
+    }
+
+    [Fact]
+    public void Null_geographic_scope_collection_is_rejected()
+    {
+        Assert.Throws<ArgumentNullException>(() => new DiscoveryGeographyIntent(PublicationMarketIntent.Unconstrained, null!));
     }
 
     [Fact]

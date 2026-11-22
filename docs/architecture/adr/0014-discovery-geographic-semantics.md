@@ -36,6 +36,16 @@ is intentionally independent from legacy `SearchRequest` in this phase. Existing
 `SearchRequest.SourceMarkets`, constructors, validation, equality, planner, orchestrator, gate
 and provenance remain unchanged and therefore retain their existing semantics.
 
+The three collection-bearing contracts are sealed classes, not value-equal records:
+`PublicationMarketIntent.HasSameIntent`, `DiscoveryGeographyIntent.HasSameIntent` and
+`RemoteWorkEligibilityByCountry.HasSameObservations` are the explicit semantic comparators.
+This avoids reference-based equality of frozen collections appearing to be value equality. Every
+new country boundary rejects `default(CountryCode)` as well as invalid country values.
+
+`RemoteWorkEligibilityByCountry` is an immutable snapshot of values only. It carries neither
+source evidence nor observation time; a future `SourceProvenance` evolution must own those
+metadata. Its values alone never authorize a Mandatory filter.
+
 ## Consequences
 
 - The current Jobicy adapter remains disabled and fail-closed. This ADR adds no capability and
