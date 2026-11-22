@@ -67,6 +67,9 @@ jobs:
       - name: Test
         if: steps.solution.outputs.found == 'true'
         run: dotnet test tests/COA.UnitTests/COA.UnitTests.csproj --configuration Release --no-build
+      - name: Web JSON contract regression tests
+        if: steps.solution.outputs.found == 'true'
+        run: dotnet test tests/COA.Web.Tests/COA.Web.Tests.csproj --configuration Release --no-build
 
   sql-integration:
     runs-on: ubuntu-latest
