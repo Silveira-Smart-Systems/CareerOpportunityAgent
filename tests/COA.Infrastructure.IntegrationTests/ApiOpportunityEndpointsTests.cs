@@ -134,6 +134,20 @@ public sealed class ApiOpportunityEndpointsTests(SqlServerFixture fixture) : ICl
         Assert.All(ownerAItems.EnumerateArray(), item => Assert.True(item.GetProperty("opportunity").GetProperty("isSynthetic").GetBoolean()));
     }
 
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task Synthetic_seed_is_not_mapped_without_development_and_opt_in(bool development, bool enableSyntheticSeed)
+    {
+        using var factory = new ApiProfileFactory(fixture.ConnectionString, development, enableSyntheticSeed);
+        using var client = factory.CreateClient();
+        Authorize(client, factory.CreateToken($"seed-gate-{Guid.NewGuid():N}"));
+
+        var response = await client.PostAsync("/api/opportunities/seed-synthetic", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     private static void Authorize(HttpClient client, string token) =>
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
