@@ -139,10 +139,8 @@ public sealed class ScopedDiscoveryOrchestrator(
     private static bool ValidResult(ScopedSourceExecutionRequest request, ScopedSourceSearchResult result) =>
         result is not null && result.Candidates is not null && result.AppliedCriteria is not null &&
         result.Candidates.All(candidate => candidate is not null && candidate.Provenance is not null &&
-            candidate.Provenance.SourceId == request.Target.SourceId &&
-            candidate.Provenance.RequestedScope == request.Target.Scope &&
-            !string.IsNullOrWhiteSpace(candidate.Provenance.ExternalId) &&
-            candidate.Provenance.SourceUrl is { IsAbsoluteUri: true } && candidate.Fields is not null) &&
+            ScopedSourceProvenanceValidator.IsValid(request.Target, candidate.Provenance) &&
+            candidate.Fields is not null) &&
         result.AppliedCriteria.All(applied => request.Criteria.Any(planned => planned.Criterion == applied.Criterion)) &&
         result.AppliedCriteria.Select(applied => applied.Criterion).Distinct().Count() == result.AppliedCriteria.Count &&
         request.Criteria.Where(criterion => criterion.IsMandatory).All(required =>
