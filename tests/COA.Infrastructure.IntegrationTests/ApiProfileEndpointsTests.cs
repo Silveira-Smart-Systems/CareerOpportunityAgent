@@ -52,8 +52,12 @@ public sealed class ApiProfileEndpointsTests(SqlServerFixture fixture) : IClassF
         Assert.Equal(HttpStatusCode.OK, current.StatusCode);
         Assert.Equal(HttpStatusCode.OK, revise.StatusCode);
         Assert.Equal(HttpStatusCode.OK, historical.StatusCode);
-        Assert.Equal("Architect", (await JsonDocument.ParseAsync(await revise.Content.ReadAsStreamAsync())).RootElement.GetProperty("headline").GetString());
+        var revised = await JsonDocument.ParseAsync(await revise.Content.ReadAsStreamAsync());
+        Assert.Equal("Architect", revised.RootElement.GetProperty("headline").GetString());
         Assert.Equal("Engineer", (await JsonDocument.ParseAsync(await historical.Content.ReadAsStreamAsync())).RootElement.GetProperty("headline").GetString());
+        Assert.Equal("synthetic", revised.RootElement.GetProperty("evidence")[0].GetProperty("claim").GetString());
+        Assert.Equal(80.01m, revised.RootElement.GetProperty("preferences").GetProperty("minimumHourlyRate").GetDecimal());
+        Assert.Equal("EUR", revised.RootElement.GetProperty("preferences").GetProperty("currency").GetString());
     }
 
     [Fact]
