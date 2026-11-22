@@ -28,7 +28,7 @@ public sealed record SearchProfileRequest(string Name, SearchPreferencesDto Pref
 /// </summary>
 public sealed class CoaApiClient(HttpClient httpClient, IHttpContextAccessor httpContextAccessor)
 {
-    private static readonly JsonSerializerOptions ApiJsonOptions = new(JsonSerializerDefaults.Web)
+    internal static readonly JsonSerializerOptions ApiJsonOptions = new(JsonSerializerDefaults.Web)
     {
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false) }
     };
