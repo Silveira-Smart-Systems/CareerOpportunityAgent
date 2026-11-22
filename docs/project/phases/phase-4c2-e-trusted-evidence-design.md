@@ -170,3 +170,39 @@ Outstanding architecture decisions: trusted verifier ownership and eligible evid
 - Add concurrency model tests that force revocation/reservation interleavings and uncertain start, beyond normal CI success.
 
 **No change to approval boundaries:** PR #75 remains Draft; no provider activation, implementation, merge or deployment follows from this proposed ADR.
+
+
+## coa-004 — ADR candidate: revocation after reservation and attempt start
+
+**Status: Proposed; requires explicit architecture sign-off.** Applies to future authority-backed execution, not the current in-memory reference gate.
+
+### Recommended policy
+
+- **Reserved, not started; revocation committed:** block adapter start. Cancel the reservation and release only when a durable, authoritative state transition proves the attempt never started. Otherwise quarantine/hold for reconciliation and account conservatively.
+- **Start requested concurrently with revocation:** start authorization must perform a fenced, authoritative transition that is ordered with revocation. A prior committed revocation wins and prevents start; if the ordering is unknown, no new adapter invocation is permitted.
+- **Started before revocation:** mark the attempt as potentially billable/consumed and do not reissue the permit. Where cancellation is supported, request best-effort cancellation; cancellation does **not** establish that the external side effect was prevented. Settle conservatively, audit the revocation and the outcome, and never retroactively release solely because the adapter returned an error.
+- **Revocation during unknown/crash state:** prevent retry on the old permit, retain conservative accounting and require authority-owned reconciliation with auditable evidence of non-start before any release.
+- **Future attempts:** always require a new authoritative verification and reservation; revoked evidence denies.
+
+### Explicit separation of state and accounting
+
+`Reserved`, `Started`, `Consumed`, `Released` and `ReconciliationRequired` are **proposed logical states**, not existing implementation types. The lifecycle must be monotonic, idempotent and durable. A record can be marked `ReconciliationRequired` without granting a second execution. Reconciliation must not invent a successful external cancellation.
+
+### Required concurrency tests
+
+1. Revocation commits before a fenced `Reserved -> Started` transition: no adapter call.
+2. Start commits first, then revocation: one attempt maximum, conservative consumption, optional best-effort cancellation.
+3. Worker crashes after reservation but before provable start: no unsafe release; reconcile.
+4. Worker crashes after durable start but before adapter response: no retry/release on same permit.
+5. Duplicate revocation, settlement and reconciliation events: idempotent transitions and single accounting.
+6. Authority outage while transitioning to start: no adapter call, hold/deny pending reconciliation.
+7. New attempt after revocation: deny even when an older permit existed.
+
+### Architecture decisions still required
+
+- Which internal team/service owns authoritative evidence verification, revocation and reconciliation?
+- What persistence/transaction protocol proves the ordering of revocation, reservation and start?
+- Is best-effort cancellation mandated for all adapters or only adapters with explicit support?
+- What retention, access and incident escalation policies govern reconciliation records?
+
+The recommended behavior is a **design proposal**, not a production guarantee, and does not authorize runtime changes, merges, deployment or provider activation.
