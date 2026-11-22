@@ -366,3 +366,51 @@ These are logical responsibilities; do not infer separate microservices or a par
 - No scheduler, ingestion, provider activation, licensing assumption, runtime code, database migration, merge or deploy is authorized.
 - Green CI on a documentation commit verifies the repository checks, not the correctness of production distributed authorization.
 - **Next human decision:** identify authority/governance owners and evidence classes; approve a durable ordering approach or a bounded evaluation plan before implementation.
+
+
+## coa-004 — Contract acceptance criteria and adversarial test catalog
+
+**Status: Proposed test specification only.** The test IDs below are traceable acceptance criteria, not implemented or executed tests. All production guarantees require a separately approved durable design and multi-worker verification.
+
+| Test ID | Boundary | Given / when | Required observable result |
+| --- | --- | --- | --- |
+| EV-01 | Typed evidence subject | `LegacyMarket(PT)` evidence is presented for `PublicationCountry(PT)` | Deny; no implicit conversion or permit |
+| EV-02 | Evidence issuer | Provider/adapter supplies `verified=true` or external ID | Treat as observation; deny absent independent authority verification |
+| EV-03 | Evidence validity | Evidence missing, unknown class/issuer, expired, stale version or revoked | Fail closed with safe, non-sensitive reason |
+| EV-04 | Evidence authority | Unauthorized identity attempts issue/revoke/overwrite | Reject and audit without changing trusted state |
+| AU-01 | Authorization gate | Authority unreachable or version cannot be proven current | No reservation and no adapter invocation |
+| AU-02 | Atomic reservation | Two workers race for final shared capacity slot | At most one durable successful reservation |
+| AU-03 | Idempotency | Same attempt request replayed concurrently | At most one permit and one capacity charge |
+| AU-04 | Typed target | Permit is replayed against different source/scope | Deny; permit never widens authority |
+| RV-01 | Revocation ordering | Revocation commits before reservation | No reservation or adapter start |
+| RV-02 | Fenced start | Revocation commits after reservation but before fenced start | Block start; release only with authoritative non-start proof |
+| RV-03 | Concurrent transition | Revocation and start race across workers | Deterministic order; no start after earlier committed revocation |
+| RV-04 | Post-start revocation | Start commits before revocation | No replay; conservative settlement; optional supported cancellation does not prove non-execution |
+| AT-01 | Crash recovery | Worker crashes after reservation before proven start | No automatic unsafe release; reconciliation required |
+| AT-02 | Unknown external result | Worker crashes/times out after durable start | No automatic retry or release on same permit |
+| AT-03 | Settlement | Duplicate completion/revocation/reconciliation events arrive | Idempotent state and single accounting |
+| AT-04 | Release | Reviewer requests release with no authoritative non-start evidence | Deny release and record audit rationale |
+| AD-01 | Audit safety | Provider payload contains token/secret/PII | Logs omit secrets and sensitive payload; retain opaque correlation and safe reason |
+| AD-02 | Audit completeness | Authority version changes during attempt | Actor, evidence version, decision, state transition and safe reason are traceable |
+| BC-01 | Compatibility | Existing legacy-scoped consumer uses unchanged interface | No silent semantic change; regression tests pass |
+| OP-01 | Rollout guard | Provider disabled and feature gate off | No scheduling, ingestion, adapter invocation or production authorization |
+
+### Test execution tiers and evidence required
+
+- **Tier A — pure contract/unit:** typed-scope non-equivalence, trust provenance, reason mapping, state-machine invalid transitions, serialization compatibility.
+- **Tier B — authority integration:** issuer permissions, stale/revoked evidence, durable version/fencing behavior, audit writes and crash-restart recovery.
+- **Tier C — multi-worker deterministic concurrency:** barrier-controlled revocation/start races, last-slot contention, replay/idempotency and reconciliation races across processes.
+- **Tier D — operational failure injection:** database/authority outage, partial commit, worker restart, adapter timeout, delayed response, duplicate delivery and rollback/feature-off verification.
+
+Every test report must record the exact commit, environment, backend, test seed, number of workers, fault schedule and observed audit/permit outcomes. Passing Tier A does not satisfy Tier C/D.
+
+### Proposed definition of done for implementation issues (future, not authorized)
+
+1. Contract and exact typed-scope behavior reviewed by the designated owner.
+2. Negative-path acceptance cases mapped to tests with no missing security assertions.
+3. No provider-origin field can issue authority or bypass deny conditions.
+4. Distributed correctness claims supported by repeatable multi-worker tests against the selected durable backend.
+5. Safe audit, operational recovery, rollback and compatibility evidence attached to PR.
+6. Explicit human sign-off before merge, provider enablement or deployment.
+
+**Unresolved prerequisites:** D0 named owners and evidence classes, backend consistency proof, audit retention/access, operational reconciliation rules and separate implementation approval.
