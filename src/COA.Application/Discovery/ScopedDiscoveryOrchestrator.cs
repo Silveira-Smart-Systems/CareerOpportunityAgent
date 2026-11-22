@@ -121,8 +121,19 @@ public sealed class ScopedDiscoveryOrchestrator(
 
                 if (!ValidResult(request, result))
                     return Failure(request.Target, SourceExecutionStatus.InvalidPlan, "AdapterResultInvalid");
+                // Preserve provider claims as received. A contradictory country claim is
+                // diagnostic only: no implicit correction, filtering or authorization.
+                var geographyDiagnostics = result.Candidates
+                    .Where(candidate => ScopedGeographyClaimEvaluator.Evaluate(
+                        request.Target.Scope, candidate.Provenance.GeographyClaim) ==
+                        ScopedGeographyClaimAssessment.ConflictsWithRequestedCountry)
+                    .Select(candidate => new ScopedSourceExecutionDiagnostic(
+                        request.Target, "ObservedGeographyConflict")
+                    {
+                        ExternalId = candidate.Provenance.ExternalId
+                    }).ToArray();
                 return new ScopedSourceExecutionOutcome(request.Target, SourceExecutionStatus.Succeeded,
-                    result.Candidates, []);
+                    result.Candidates, geographyDiagnostics);
             }
             finally
             {
