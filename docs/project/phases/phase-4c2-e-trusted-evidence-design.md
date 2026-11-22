@@ -64,3 +64,61 @@ Keep `IScopedSourceExecutionGate` and `ScopedSourceExecutionAuthorization` as th
 ## Explicit non-goals
 
 No licensing determination, Jobicy/provider activation, scheduler, ingestion, persistence migration, production rollout, or merge authorization. Later workstreams for field-level trace, deduplication and distributed gate remain tracked in #74.
+
+## coa-004 architectural review — proposed resolutions (not implementation approval)
+
+Review: Draft PR #75, review 6013011318; tracking #74, parent #67, dependency #72 / Draft PR #73. These are **design constraints and proposals**, not evidence of implemented distributed guarantees.
+
+### Authority, verification and consistency boundary (P0)
+
+- Only an internally controlled evidence registry and verifier may issue, update or revoke verification records. Provider claims, URLs, external IDs, and `ScopedSourceProvenance` remain untrusted observations.
+- The verification record is bound to an exact typed `(SourceId, SourceExecutionScope)`, with an opaque evidence ID, trusted issuer, verification version, verified-at, expiry, and revocation state. No implicit conversion between scope variants.
+- Proposed invariant: a reservation is allowed only when a current, authoritative evidence version and current policy are validated within a consistency boundary that prevents a concurrent revocation from being silently ignored. The required transactional/linearization mechanism remains **open pending backend selection**. A cached or planning-time `Verified` value alone never authorizes.
+- If authority freshness, version comparison, policy consistency, or revocation status cannot be established, **deny**. A revocation racing with reservation must have a defined ordering: if revocation precedes authorization's linearization point, deny; otherwise the treatment of already reserved or started attempts is an explicit operational policy decision, not an implicit guarantee.
+- Evidence verification is necessary, never sufficient: current licensing policy, health, quota, budget and capacity must independently pass.
+
+### Authorization contract versus deployment implementation (P0)
+
+- Retain `IScopedSourceExecutionGate` / `ScopedSourceExecutionAuthorization` as the compatibility boundary; evolve additively. A permit must be bound to exact typed target, attempt ID, authority evidence version and decision context, without exposing sensitive evidence.
+- The existing in-memory gate is **single-process test/reference only**. It does not provide cross-instance atomicity, crash durability or production authorization guarantees.
+- Production-grade compare-and-reserve for budget/quota/capacity requires a separately designed durable transaction boundary and a separately authorized implementation. Until then, no production or multi-instance activation.
+
+### Attempt lifecycle and crash recovery (P0)
+
+Proposed logical states: `Reserved -> Started -> Consumed`, or `Reserved -> Released` **only with authoritative proof that execution never started**. `Started -> Consumed` includes timeout, cancellation and adapter failure. Unknown/crash states are conservatively treated as potentially started, never automatically released or replayed.
+
+- Persist/coordinate the attempt identity and single-use permit before the adapter is invoked; exact ordering, durability and recovery mechanism are pending distributed-gate design.
+- Repeated consume/release must be idempotent. A retry is a new decision and reservation with an explicit attempt identity; no reuse of a consumed or uncertain permit.
+- Cancellation before proven start may release; cancellation after or with uncertain start consumes/holds conservatively. Recovery/reconciliation requires auditable operator or authority-owned rules; no automatic double-spend.
+
+### Denial diagnostics and audit (P1 specification)
+
+- Proposed additive, versioned reason categories: `EvidenceMissing`, `EvidenceNotVerified`, `EvidenceExpired`, `EvidenceRevoked`, `EvidenceStale`, `EvidenceAuthorityUnavailable`, `ScopeMismatch`, `PolicyDenied`, `SourceUnavailable`, `QuotaExceeded`, `BudgetExceeded`, `CapacityUnavailable`, `ReservationConflict`. Final naming and compatibility mapping require contract review.
+- Audit the decision timestamp, opaque evidence/version reference, exact typed scope, attempt/correlation ID, outcome and safe reason category; redact secrets and sensitive criteria. Do not log raw provider evidence, credentials, sensitive URLs or token-bearing query strings.
+- Retention, access control, deletion policy and audit storage ownership remain **open**, requiring explicit approval before production design sign-off.
+
+### Deterministic acceptance and negative test requirements
+
+| Scenario | Expected invariant |
+| --- | --- |
+| Missing, pending, rejected, expired, revoked or untrusted evidence | Deny before adapter invocation |
+| Evidence authority unavailable, stale version, unverifiable revocation | Deny; no fallback to cached or provider claim |
+| Revocation racing with reservation | Respect defined authorization ordering; never authorize after an earlier committed revocation |
+| `LegacyMarket(PT)` evidence for `PublicationCountry(PT)` request | Deny exact-scope mismatch |
+| Provider geography agrees, disagrees or is unknown | No change to authorization decision |
+| License/health/quota/budget/capacity fails despite verified evidence | Deny |
+| Two concurrent final-slot reservations | At most one grant in a future durable implementation |
+| Duplicate permit consume or repeated retry | No double accounting or permit replay |
+| Crash before confirmed start | Release only if non-start is provable |
+| Crash, timeout or cancellation after/around uncertain start | No unsafe release; conservative accounting and reconciliation |
+| Diagnostic/audit output | Stable safe reason; no credentials or raw sensitive evidence |
+
+### Delivery and approval gates
+
+1. **Evidence contract and verification policy**: independently reviewable design and negative tests; no runtime changes without separate authorization.
+2. **Scoped gate integration and attempt lifecycle**: additive compatibility, explicit regression and failure tests; separate implementation approval.
+3. **Durable distributed reservation**: backend selection, concurrency/recovery guarantees, operations and audit policies; separate design, implementation and deployment approvals.
+
+Outstanding architecture decisions: trusted verifier ownership and eligible evidence classes; revocation linearization and post-reservation policy; durable transaction backend; uncertain-start reconciliation; audit retention/access ownership. None is silently treated as settled by green CI.
+
+**Guardrails:** keep #73/#75 Draft until explicit review/merge authorization; Jobicy disabled; #47 out of scope; no public HTTP, ingestion, scheduler, persistence migration, provider activation, deployment or runtime implementation from this document.
