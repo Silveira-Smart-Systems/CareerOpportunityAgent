@@ -145,7 +145,7 @@ public sealed class ApiOpportunityEndpointsTests(SqlServerFixture fixture) : ICl
 
         var response = await client.PostAsync("/api/opportunities/seed-synthetic", null);
 
-        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
     }
 
     private static void Authorize(HttpClient client, string token) =>
