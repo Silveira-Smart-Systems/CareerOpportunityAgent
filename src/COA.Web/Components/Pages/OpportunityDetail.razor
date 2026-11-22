@@ -1,0 +1,8 @@
+@page "/opportunities/{Id:guid}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using COA.Web.Api
+@inject CoaApiClient Api
+<PageTitle>Opportunity</PageTitle>
+@if (loading) { <p role="status">Loading opportunity…</p> } else if (item is null) { <p role="alert">Opportunity not found.</p> } else { <h1>@item.Opportunity.Title</h1><p>@item.Opportunity.Description</p><p>Score: @item.Assessment.Score% — @(item.Assessment.Eligible?"Eligible":"Not eligible")</p><ul>@foreach(var criterion in item.Assessment.Criteria){<li>@criterion.Code: @criterion.Evidence</li>}</ul><a href="/opportunities">Back to opportunities</a> }
+@code { [Parameter] public Guid Id {get;set;} private ScoredOpportunity? item; private bool loading=true; protected override async Task OnParametersSetAsync(){try{item=await Api.GetOpportunityAsync(Id);}finally{loading=false;}} }

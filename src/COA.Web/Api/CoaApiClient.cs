@@ -50,6 +50,14 @@ public sealed class CoaApiClient(HttpClient httpClient, IHttpContextAccessor htt
         return await response.Content.ReadFromJsonAsync<OpportunityImportResult>(cancellationToken)
             ?? throw new CoaApiRequestException(response.StatusCode, "The COA API returned an empty response.");
     }
+    public async Task<ScoredOpportunity?> GetOpportunityAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        using var request = await CreateRequestAsync(HttpMethod.Get, $"api/opportunities/{id}", cancellationToken);
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        await EnsureSuccessAsync(response, cancellationToken);
+        return await response.Content.ReadFromJsonAsync<ScoredOpportunity>(cancellationToken);
+    }
 
     public async Task<CareerProfileDto?> GetProfileAsync(CancellationToken cancellationToken = default)
     {

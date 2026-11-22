@@ -106,6 +106,8 @@ opportunities.MapPost("", async (HttpContext context, OpportunityUseCases useCas
 });
 opportunities.MapGet("", async (HttpContext context, OpportunityUseCases useCases, CancellationToken ct) =>
 { if (!AuthenticatedOwner.TryCreateOwnerIdentity(context.User,out var owner)) return ForbiddenProblem(); return Results.Ok((await useCases.ListScoredAsync(owner,ct)).Select(x => new { x.Opportunity, x.Assessment })); });
+opportunities.MapGet("/{id:guid}", async (HttpContext context, Guid id, OpportunityUseCases useCases, CancellationToken ct) =>
+{ if (!AuthenticatedOwner.TryCreateOwnerIdentity(context.User,out var owner)) return ForbiddenProblem(); var result=await useCases.GetScoredAsync(owner,id,ct); return result is null?NotFoundProblem():Results.Ok(new { result.Value.Opportunity, result.Value.Assessment }); });
 if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Demo:EnableSyntheticSeed"))
 {
     opportunities.MapPost("/seed-synthetic", async (HttpContext context, OpportunityUseCases useCases, CancellationToken ct) =>
