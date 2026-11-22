@@ -90,7 +90,14 @@ public interface IScopedOpportunitySourceAdapterResolver
 /// </summary>
 public sealed record ScopedSourceProvenance(
     SourceId SourceId, string ExternalId, Uri SourceUrl, SourceExecutionScope RequestedScope,
-    DateTimeOffset RetrievedAtUtc);
+    DateTimeOffset RetrievedAtUtc)
+{
+    /// <summary>
+    /// Optional provider-reported geography. Null means no geography claim was
+    /// supplied; it must never be inferred from RequestedScope.
+    /// </summary>
+    public ScopedSourceGeographyClaim? GeographyClaim { get; init; }
+}
 
 public sealed record ScopedSourceOpportunityCandidate(
     ScopedSourceProvenance Provenance, IReadOnlyDictionary<string, SourceObservedValue> Fields);
