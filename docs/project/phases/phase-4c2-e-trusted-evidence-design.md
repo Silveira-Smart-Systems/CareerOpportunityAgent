@@ -122,3 +122,51 @@ Proposed logical states: `Reserved -> Started -> Consumed`, or `Reserved -> Rele
 Outstanding architecture decisions: trusted verifier ownership and eligible evidence classes; revocation linearization and post-reservation policy; durable transaction backend; uncertain-start reconciliation; audit retention/access ownership. None is silently treated as settled by green CI.
 
 **Guardrails:** keep #73/#75 Draft until explicit review/merge authorization; Jobicy disabled; #47 out of scope; no public HTTP, ingestion, scheduler, persistence migration, provider activation, deployment or runtime implementation from this document.
+
+
+## coa-004 — ADR candidate: revocation/reservation ordering (proposed, not accepted)
+
+**Status:** Proposed for architecture review. This is not an implementation instruction or a claim of current system behavior.
+
+### Decision drivers
+
+- A verified record may be revoked after planning, during gate evaluation, or after a permit has been reserved.
+- Multiple workers must not independently authorize using stale cached evidence or oversubscribe a shared budget.
+- The adapter may have been invoked when a worker crashes; releasing uncertain permits can authorize duplicate execution.
+
+### Proposed authorization ordering
+
+1. Identify the exact typed target and new idempotent attempt ID; validate the immutable plan.
+2. Read the current authority-owned evidence/version and revocation state through a strongly consistent authority interface. Reject missing, ambiguous, expired, stale or unavailable state.
+3. Re-evaluate policy and quota/budget/capacity against the same authoritative decision epoch. The eventual production transaction must **serialize reservation with revocation and relevant policy updates**, or use an equivalent fenced/version-checked protocol with a documented proof of correctness. No check-then-write gap may silently authorize after an earlier committed revocation.
+4. Commit a single-use reservation with the evidence version, policy epoch, target and attempt identity. The successful commit is the **authorization linearization point**; it must be ordered with revocation.
+5. Before invoking the adapter, durably transition the attempt to `Started` under the same attempt identity. If the start transition is uncertain, treat the attempt as potentially started; do not release or replay automatically.
+6. After the adapter returns or fails, settle the attempt idempotently. Cancellation, timeout and failure after `Started` consume the reservation. Reauthorization is required for a retry.
+
+### Revocation timing semantics
+
+| Timing | Proposed treatment |
+| --- | --- |
+| Revocation committed before authorization linearization | Deny |
+| Revocation concurrent with reservation | Exactly one ordering must be authoritative; deny if ordering cannot be established |
+| Revocation committed after reservation but before confirmed adapter start | **Open policy choice:** cancel and safely release only with proven non-start, or permit the already-authorized attempt |
+| Revocation after adapter start | **Open policy choice:** allow attempt to settle or attempt best-effort cancellation; do not retroactively pretend it never started |
+| Authority outage or unknown version during authorization | Deny, no cached fallback |
+
+### Alternative analysis
+
+- **Transactional serialization** across evidence status, policy epoch and reservation: clearest safety semantics, but may require co-location or coordinated transaction boundaries.
+- **Fenced optimistic concurrency** with monotonic authority version and compare-and-reserve: can avoid a single storage transaction if correctness is demonstrated for revocation races and all writers honor fencing.
+- **Eventually consistent cache-only validation:** rejected for authorization; insufficient to guarantee fail-closed behavior during revocation.
+
+**Recommendation:** choose a linearizable decision boundary as the *required property*, not a specific database or distributed lock. Select storage and prove the ordering contract in the separate distributed-gate design. Do not assert that the current in-memory implementation meets it.
+
+### Required design sign-off before implementation
+
+- Name the trusted authority owner and which evidence classes it can verify.
+- Decide post-reservation and post-start revocation policy, including whether already-started attempts may continue.
+- Select a durable consistency mechanism and document failure behavior, fencing/versioning and crash recovery.
+- Define audit retention, access ownership and safe reason-code mapping.
+- Add concurrency model tests that force revocation/reservation interleavings and uncertain start, beyond normal CI success.
+
+**No change to approval boundaries:** PR #75 remains Draft; no provider activation, implementation, merge or deployment follows from this proposed ADR.
