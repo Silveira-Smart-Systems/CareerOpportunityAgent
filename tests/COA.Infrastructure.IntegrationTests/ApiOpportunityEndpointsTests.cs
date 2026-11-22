@@ -77,6 +77,22 @@ public sealed class ApiOpportunityEndpointsTests(SqlServerFixture fixture) : ICl
     }
 
     [Fact]
+    public async Task Other_owner_cannot_get_an_opportunity_by_id()
+    {
+        using var factory = new ApiProfileFactory(fixture.ConnectionString);
+        using var ownerA = factory.CreateClient();
+        using var ownerB = factory.CreateClient();
+        Authorize(ownerA, factory.CreateToken($"opportunity-detail-a-{Guid.NewGuid():N}"));
+        Authorize(ownerB, factory.CreateToken($"opportunity-detail-b-{Guid.NewGuid():N}"));
+        var create = await SendJsonAsync(ownerA, OpportunityJson("https://jobs.example.test/detail-private", "Private", "Synthetic role"));
+        var id = JsonDocument.Parse(await create.Content.ReadAsStringAsync()).RootElement.GetProperty("opportunity").GetProperty("id").GetGuid();
+
+        var response = await ownerB.GetAsync($"/api/opportunities/{id}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Concurrent_imports_return_created_and_conflict()
     {
         using var factory = new ApiProfileFactory(fixture.ConnectionString);
