@@ -1,0 +1,161 @@
+.opportunity-detail {
+    margin: 0 auto;
+    max-width: 960px;
+    padding: 1.5rem;
+}
+
+.detail-header,
+.assessment-values,
+.criteria-list li {
+    display: flex;
+    gap: 1rem;
+}
+
+.detail-header {
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+}
+
+.detail-header h1,
+.detail-header p,
+.assessment-summary p,
+.opportunity-description p {
+    margin: 0;
+}
+
+.eyebrow,
+.assessment-label {
+    color: #505860;
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.synthetic-label,
+.hard-constraint,
+.criterion-state,
+.eligibility {
+    border-radius: 1rem;
+    display: inline-block;
+    font-weight: 700;
+    padding: 0.2rem 0.6rem;
+}
+
+.synthetic-label {
+    background: #e8eefc;
+    color: #163b77;
+}
+
+.assessment-summary,
+.opportunity-description,
+.message-state {
+    border: 1px solid #c9d1d9;
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+}
+
+.assessment-values {
+    align-items: stretch;
+}
+
+.assessment-values > div {
+    flex: 1;
+}
+
+.score {
+    display: block;
+    font-size: 2rem;
+    margin: 0.2rem 0;
+}
+
+.eligible,
+.matched {
+    background: #dff7e6;
+    color: #0c5424;
+}
+
+.ineligible,
+.missing {
+    background: #fde8e7;
+    color: #8a1c17;
+}
+
+.unknown {
+    background: #fff3cd;
+    color: #654c00;
+}
+
+.hard-constraint {
+    background: #eceff1;
+    color: #263238;
+    font-size: 0.875rem;
+    margin-left: 0.5rem;
+}
+
+.criteria-list {
+    display: grid;
+    gap: 0.75rem;
+    list-style: none;
+    padding: 0;
+}
+
+.criteria-list li {
+    align-items: center;
+    border: 1px solid #c9d1d9;
+    border-radius: 0.35rem;
+    flex-wrap: wrap;
+    padding: 0.75rem;
+}
+
+.criterion-description {
+    color: #505860;
+    flex-basis: 100%;
+}
+
+.loading-state {
+    color: #505860;
+}
+
+.error-state {
+    border-color: #8a1c17;
+}
+
+.external-link {
+    white-space: nowrap;
+}
+
+button:focus-visible,
+a:focus-visible {
+    outline: 3px solid #005fcc;
+    outline-offset: 2px;
+}
+
+.visually-hidden {
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+    .opportunity-detail {
+        padding: 1rem;
+    }
+
+    .detail-header,
+    .assessment-values {
+        flex-direction: column;
+    }
+
+    .external-link {
+        white-space: normal;
+    }
+}

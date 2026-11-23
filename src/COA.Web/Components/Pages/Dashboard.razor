@@ -1,12 +1,33 @@
 @page "/dashboard"
 @attribute [Authorize]
 @rendermode InteractiveServer
+
 <PageTitle>COA Dashboard</PageTitle>
-<h1>Dashboard</h1>
-<p>Authentication is active.</p>
-<p><a href="/opportunities">Manage opportunities</a></p>
-<p><a href="/profile">Career profile</a> · <a href="/search-profiles">Search preferences</a></p>
-<form method="post" action="/logout">
-    <AntiforgeryToken />
-    <button type="submit">Sign out</button>
-</form>
+
+<main class="dashboard-page">
+    <header class="dashboard-header">
+        <p class="eyebrow">Career Opportunity Agent</p>
+        <h1>Dashboard</h1>
+        <p>Manage your profile, search preferences, and imported opportunities.</p>
+    </header>
+
+    <nav class="dashboard-actions" aria-label="Workspace actions">
+        <a class="dashboard-card" href="/opportunities">
+            <h2>Opportunities</h2>
+            <p>Import opportunities and inspect their evidence-backed assessment.</p>
+        </a>
+        <a class="dashboard-card" href="/profile">
+            <h2>Career profile</h2>
+            <p>Review the profile evidence used by your workspace.</p>
+        </a>
+        <a class="dashboard-card" href="/search-profiles">
+            <h2>Search preferences</h2>
+            <p>Manage your active search preferences.</p>
+        </a>
+    </nav>
+
+    <form method="post" action="/logout">
+        <AntiforgeryToken />
+        <button type="submit">Sign out</button>
+    </form>
+</main>

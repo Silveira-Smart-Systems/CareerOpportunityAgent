@@ -3,6 +3,7 @@
 @rendermode InteractiveServer
 @using System.ComponentModel.DataAnnotations
 @using COA.Web.Api
+@using COA.Web.Components
 @inject CoaApiClient CoaApiClient
 
 <PageTitle>Opportunities</PageTitle>
@@ -10,6 +11,7 @@
 <main class="opportunities-page">
     <header class="page-header">
         <div>
+            <p class="eyebrow">Opportunity workspace</p>
             <h1>Opportunities</h1>
             <p>Import an opportunity and review its evidence-backed match.</p>
         </div>
@@ -51,24 +53,38 @@
         <p class="status-message success" role="status">@successMessage</p>
     }
 
-    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    @if (!string.IsNullOrWhiteSpace(importErrorMessage))
     {
-        <p class="status-message error" role="alert">@errorMessage</p>
+        <p class="status-message error" role="alert">@importErrorMessage</p>
     }
 
-    <section aria-labelledby="imported-heading">
+    <section aria-labelledby="imported-heading" aria-busy="@isLoading">
         <div class="section-heading">
-            <h2 id="imported-heading">Imported opportunities</h2>
+            <div>
+                <h2 id="imported-heading">Imported opportunities</h2>
+                <p class="section-help">Score and eligibility answer different questions. Review the evidence before deciding.</p>
+            </div>
             <button type="button" @onclick="LoadOpportunitiesAsync" disabled="@isLoading">Refresh</button>
         </div>
 
         @if (isLoading)
         {
-            <p role="status">Loading opportunities…</p>
+            <p class="loading-state" role="status">Loading opportunities…</p>
+        }
+        else if (!string.IsNullOrWhiteSpace(listErrorMessage))
+        {
+            <section class="list-error" role="alert" aria-labelledby="list-error-heading">
+                <h3 id="list-error-heading">Opportunities unavailable</h3>
+                <p>@listErrorMessage</p>
+                <button type="button" @onclick="LoadOpportunitiesAsync">Retry</button>
+            </section>
         }
         else if (opportunities.Count == 0)
         {
-            <p>No opportunities have been imported yet.</p>
+            <section class="empty-state" aria-labelledby="empty-heading">
+                <h3 id="empty-heading">No imported opportunities yet</h3>
+                <p>Use the form above to import an opportunity. Imported synthetic demos stay clearly labelled.</p>
+            </section>
         }
         else
         {
@@ -79,24 +95,35 @@
                         <div class="opportunity-summary">
                             <div>
                                 <h3><a href="@($"/opportunities/{item.Opportunity.Id}")">@item.Opportunity.Title</a></h3>
-                                @if (item.Opportunity.IsSynthetic) { <p><strong>Synthetic demo</strong></p> }
+                                @if (item.Opportunity.IsSynthetic)
+                                {
+                                    <p class="synthetic-label">Synthetic demo</p>
+                                }
                                 <p class="imported-at">Imported @item.Opportunity.ImportedAtUtc.ToLocalTime().ToString("g")</p>
                             </div>
-                            <a href="@item.Opportunity.OriginalUrl" target="_blank" rel="noopener noreferrer">Open opportunity</a>
+                            <a class="external-link" href="@item.Opportunity.OriginalUrl" target="_blank" rel="noopener noreferrer">Open original <span class="visually-hidden">(opens in a new tab)</span></a>
                         </div>
-                        <div class="assessment">
-                            <span class="score">@item.Assessment.Score.ToString("0.##")%</span>
-                            <span class="eligibility @(item.Assessment.Eligible ? "eligible" : "ineligible")">
-                                @(item.Assessment.Eligible ? "Eligible" : "Not eligible")
-                            </span>
+                        <div class="assessment" aria-label="Match assessment">
+                            <div>
+                                <span class="assessment-label">Match score</span>
+                                <strong class="score">@item.Assessment.Score.ToString("0.##")%</strong>
+                            </div>
+                            <div>
+                                <span class="assessment-label">Required criteria</span>
+                                <strong class="eligibility @(item.Assessment.Eligible ? "eligible" : "ineligible")">@OpportunityPresentation.EligibilityLabel(item.Assessment.Eligible)</strong>
+                            </div>
                         </div>
                         <details>
-                            <summary>Match reasons (@item.Assessment.Criteria.Count)</summary>
+                            <summary>Evidence by criterion (@item.Assessment.Criteria.Count)</summary>
+                            <p class="evidence-help">Unknown means not proven; it is not treated as missing evidence.</p>
                             <ul class="criteria-list">
                                 @foreach (var criterion in item.Assessment.Criteria)
                                 {
+                                    var evidence = OpportunityPresentation.Describe(criterion.Evidence);
                                     <li>
-                                        <strong>@criterion.Code</strong>: @FormatEvidence(criterion.Evidence)
+                                        <strong>@criterion.Code</strong>
+                                        <span class="criterion-state @evidence.CssClass">@evidence.Label</span>
+                                        <span>@evidence.Description</span>
                                         <span>(@criterion.Weight%)</span>
                                         @if (criterion.IsHardConstraint)
                                         {
@@ -118,7 +145,8 @@
     private IReadOnlyList<ScoredOpportunity> opportunities = [];
     private bool isImporting;
     private bool isLoading = true;
-    private string? errorMessage;
+    private string? importErrorMessage;
+    private string? listErrorMessage;
     private string? successMessage;
 
     protected override Task OnInitializedAsync() => LoadOpportunitiesAsync();
@@ -126,7 +154,7 @@
     private async Task ImportAsync()
     {
         isImporting = true;
-        errorMessage = null;
+        importErrorMessage = null;
         successMessage = null;
 
         try
@@ -139,7 +167,7 @@
         }
         catch (Exception exception)
         {
-            errorMessage = GetErrorMessage(exception);
+            importErrorMessage = OpportunityPresentation.DescribeLoadFailure(exception);
         }
         finally
         {
@@ -150,7 +178,7 @@
     private async Task LoadOpportunitiesAsync()
     {
         isLoading = true;
-        errorMessage = null;
+        listErrorMessage = null;
 
         try
         {
@@ -158,29 +186,13 @@
         }
         catch (Exception exception)
         {
-            errorMessage = GetErrorMessage(exception);
+            listErrorMessage = OpportunityPresentation.DescribeLoadFailure(exception);
         }
         finally
         {
             isLoading = false;
         }
     }
-
-    private static string GetErrorMessage(Exception exception) => exception switch
-    {
-        CoaApiAuthenticationException => "Your session needs a new sign-in before it can access the COA API.",
-        CoaApiAuthorizationException => "You are not authorized to access opportunities.",
-        CoaApiConflictException => "This opportunity has already been imported.",
-        CoaApiRequestException requestException => $"The COA API could not complete the request (HTTP {(int)requestException.StatusCode}).",
-        _ => "The opportunity request could not be completed. Please try again."
-    };
-
-    private static string FormatEvidence(COA.Domain.Matching.EvidenceState evidence) => evidence switch
-    {
-        COA.Domain.Matching.EvidenceState.Matched => "Matched",
-        COA.Domain.Matching.EvidenceState.Missing => "Missing",
-        _ => "Not proven"
-    };
 
     private sealed class OpportunityForm
     {
