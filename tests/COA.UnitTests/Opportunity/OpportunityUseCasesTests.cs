@@ -114,7 +114,8 @@ public sealed class OpportunityUseCasesTests
     public async Task No_preference_adds_no_work_mode_constraint_and_multiple_modes_are_preserved()
     {
         var hybrid = OpportunityModel.Create("https://jobs.example.test/hybrid", "Hybrid", "Hybrid role");
-        var noPreference = new OpportunityUseCases(new FakeOpportunityStore { Opportunities = [hybrid] }, null, new RecordingSearchStore([Search()]));
+        var persistedCareerProfile = new RecordingProfileStore(Profile("C#", WorkArrangement.Remote, remoteOnly: false));
+        var noPreference = new OpportunityUseCases(new FakeOpportunityStore { Opportunities = [hybrid] }, persistedCareerProfile, new RecordingSearchStore([Search()]));
         var multiplePreferences = new OpportunityUseCases(new FakeOpportunityStore { Opportunities = [hybrid] }, null, new RecordingSearchStore([Search(SearchWorkMode.Remote, SearchWorkMode.Hybrid)]));
 
         var noPreferenceResult = Assert.Single(await noPreference.ListScoredAsync(Owner()));
@@ -122,7 +123,52 @@ public sealed class OpportunityUseCasesTests
 
         Assert.Equal(EvidenceState.UnknownNotProven, noPreferenceResult.Assessment.Criteria.Single(x => x.Code == "work-model").Evidence);
         Assert.True(noPreferenceResult.Assessment.Eligible);
+        Assert.False(noPreferenceResult.Assessment.Criteria.Single(x => x.Code == "work-model").IsHardConstraint);
         AssertAssessment([multiplePreferencesResult], "Hybrid", EvidenceState.Matched, eligible: true);
+    }
+
+    [Fact]
+    public async Task Career_arrangement_is_soft_and_an_active_search_selection_takes_precedence()
+    {
+        var opportunities = new FakeOpportunityStore { Opportunities = [
+            OpportunityModel.Create("https://jobs.example.test/remote", "Remote", "Remote role"),
+            OpportunityModel.Create("https://jobs.example.test/hybrid", "Hybrid", "Hybrid role")
+        ] };
+        var profile = new RecordingProfileStore(Profile("C#", WorkArrangement.Hybrid, remoteOnly: false));
+        var withoutSearch = await new OpportunityUseCases(opportunities, profile, new RecordingSearchStore()).ListScoredAsync(Owner());
+        var withSearch = await new OpportunityUseCases(opportunities, profile, new RecordingSearchStore([Search(SearchWorkMode.Remote)])).ListScoredAsync(Owner());
+
+        AssertAssessment(withoutSearch, "Hybrid", EvidenceState.Matched, eligible: true);
+        Assert.False(withoutSearch.Single(x => x.Opportunity.Title == "Hybrid").Assessment.Criteria.Single(x => x.Code == "work-model").IsHardConstraint);
+        AssertAssessment(withSearch, "Remote", EvidenceState.Matched, eligible: true);
+        AssertAssessment(withSearch, "Hybrid", EvidenceState.Missing, eligible: false);
+        Assert.True(withSearch.Single(x => x.Opportunity.Title == "Remote").Assessment.Criteria.Single(x => x.Code == "work-model").IsHardConstraint);
+    }
+
+    [Fact]
+    public async Task Remote_only_and_search_mode_conflict_is_explicit_and_conservatively_ineligible()
+    {
+        var opportunity = OpportunityModel.Create("https://jobs.example.test/flexible", "Flexible", "Arrangement not stated");
+        var profile = new RecordingProfileStore(Profile("C#", WorkArrangement.Remote, remoteOnly: true));
+        var result = Assert.Single(await new OpportunityUseCases(new FakeOpportunityStore { Opportunities = [opportunity] }, profile, new RecordingSearchStore([Search(SearchWorkMode.Hybrid)])).ListScoredAsync(Owner()));
+
+        var workMode = result.Assessment.Criteria.Single(x => x.Code == "work-model");
+        Assert.Equal(EvidenceState.Missing, workMode.Evidence);
+        Assert.True(workMode.IsHardConstraint);
+        Assert.False(result.Assessment.Eligible);
+    }
+
+    [Theory]
+    [InlineData("Not remote")]
+    [InlineData("Remote not available")]
+    [InlineData("Remote and onsite")]
+    public async Task Ambiguous_or_negated_work_mode_text_never_proves_compatibility(string title)
+    {
+        var opportunity = OpportunityModel.Create($"https://jobs.example.test/{Uri.EscapeDataString(title)}", title, "Role details");
+        var result = Assert.Single(await new OpportunityUseCases(new FakeOpportunityStore { Opportunities = [opportunity] }, null, new RecordingSearchStore([Search(SearchWorkMode.Remote)])).ListScoredAsync(Owner()));
+
+        Assert.Equal(EvidenceState.UnknownNotProven, result.Assessment.Criteria.Single(x => x.Code == "work-model").Evidence);
+        Assert.False(result.Assessment.Eligible);
     }
 
     [Fact]

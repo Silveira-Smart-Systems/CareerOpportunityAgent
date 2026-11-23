@@ -25,34 +25,45 @@ public sealed class OpportunityUseCases(IOpportunityStore store, IProfileStore? 
    evidence["career-alignment"]=EvidenceState.Matched;
 
   var workMode=WorkModePreference(profile,active);
-  evidence["work-model"]=AssessWorkMode(text,workMode.Modes);
+  evidence["work-model"]=workMode.HasConflict?EvidenceState.Missing:AssessWorkMode(text,workMode.Modes);
   return ScoringPolicy.Initial.Evaluate(evidence,workMode.IsHardConstraint?["work-model"]:[]);
  }
 
- private static (IReadOnlySet<COA.Domain.SearchProfiles.SearchWorkMode> Modes,bool IsHardConstraint) WorkModePreference(COA.Domain.Profile.CareerProfile? profile,COA.Domain.SearchProfiles.JobSearchProfile? active)
+ // An active search profile owns work-mode selection: an empty selection is explicit no preference
+ // and suppresses the CareerProfile's soft arrangement. RemoteOnly remains a separate hard limit.
+ private static WorkModeDecision WorkModePreference(COA.Domain.Profile.CareerProfile? profile,COA.Domain.SearchProfiles.JobSearchProfile? active)
  {
-  var modes=(active?.Preferences.WorkModes ?? []).ToHashSet();
-  var hard=modes.Count>0;
-  if(profile?.Preferences.RemoteOnly==true)
+  if(active is not null)
   {
-   if(modes.Count==0)modes.Add(COA.Domain.SearchProfiles.SearchWorkMode.Remote);
-   else modes.IntersectWith([COA.Domain.SearchProfiles.SearchWorkMode.Remote]);
-   hard=true;
+   var selected=active.Preferences.WorkModes.ToHashSet();
+   if(profile?.Preferences.RemoteOnly!=true)return new(selected,selected.Count>0,false);
+   if(selected.Count==0)return new(WorkModes(COA.Domain.SearchProfiles.SearchWorkMode.Remote),true,false);
+   if(!selected.Contains(COA.Domain.SearchProfiles.SearchWorkMode.Remote))return new(WorkModes(),true,true);
+   return new(WorkModes(COA.Domain.SearchProfiles.SearchWorkMode.Remote),true,false);
   }
-  else if(modes.Count==0&&profile is not null)
-   modes.Add(ToSearchWorkMode(profile.Preferences.PreferredArrangement));
-  return(modes,hard);
+
+  if(profile?.Preferences.RemoteOnly==true)
+   return new(WorkModes(COA.Domain.SearchProfiles.SearchWorkMode.Remote),true,false);
+  return profile is null?new(WorkModes(),false,false):new(WorkModes(ToSearchWorkMode(profile.Preferences.PreferredArrangement)),false,false);
  }
 
  private static EvidenceState AssessWorkMode(string text,IReadOnlySet<COA.Domain.SearchProfiles.SearchWorkMode> permittedModes)
  {
   if(permittedModes.Count==0)return EvidenceState.UnknownNotProven;
+  if(HasAmbiguousWorkModeSignal(text))return EvidenceState.UnknownNotProven;
   var supportedModes=new HashSet<COA.Domain.SearchProfiles.SearchWorkMode>();
-  if(text.Contains("remote",StringComparison.OrdinalIgnoreCase))supportedModes.Add(COA.Domain.SearchProfiles.SearchWorkMode.Remote);
-  if(text.Contains("hybrid",StringComparison.OrdinalIgnoreCase))supportedModes.Add(COA.Domain.SearchProfiles.SearchWorkMode.Hybrid);
-  if(text.Contains("onsite",StringComparison.OrdinalIgnoreCase)||text.Contains("on-site",StringComparison.OrdinalIgnoreCase)||text.Contains("on site",StringComparison.OrdinalIgnoreCase))supportedModes.Add(COA.Domain.SearchProfiles.SearchWorkMode.Onsite);
-  return supportedModes.Count==0?EvidenceState.UnknownNotProven:supportedModes.Overlaps(permittedModes)?EvidenceState.Matched:EvidenceState.Missing;
+  if(System.Text.RegularExpressions.Regex.IsMatch(text,@"\bremote\b",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant))supportedModes.Add(COA.Domain.SearchProfiles.SearchWorkMode.Remote);
+  if(System.Text.RegularExpressions.Regex.IsMatch(text,@"\bhybrid\b",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant))supportedModes.Add(COA.Domain.SearchProfiles.SearchWorkMode.Hybrid);
+  if(System.Text.RegularExpressions.Regex.IsMatch(text,@"\bon[- ]?site\b",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant))supportedModes.Add(COA.Domain.SearchProfiles.SearchWorkMode.Onsite);
+  return supportedModes.Count!=1?EvidenceState.UnknownNotProven:supportedModes.Overlaps(permittedModes)?EvidenceState.Matched:EvidenceState.Missing;
  }
+
+ // Free text cannot reliably resolve negation or conflicting arrangements, so it never proves compatibility.
+ private static bool HasAmbiguousWorkModeSignal(string text) => System.Text.RegularExpressions.Regex.IsMatch(text,@"\b(?:not|no|non)[ -]?(?:remote|hybrid|on[- ]?site)\b|\b(?:remote|hybrid|on[- ]?site)(?:\s+work)?\s+(?:is\s+)?(?:not(?:\s+available)?|unavailable)\b",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+ private static IReadOnlySet<COA.Domain.SearchProfiles.SearchWorkMode> WorkModes(params COA.Domain.SearchProfiles.SearchWorkMode[] modes) => modes.ToHashSet();
+
+ private sealed record WorkModeDecision(IReadOnlySet<COA.Domain.SearchProfiles.SearchWorkMode> Modes,bool IsHardConstraint,bool HasConflict);
 
  private static COA.Domain.SearchProfiles.SearchWorkMode ToSearchWorkMode(COA.Domain.Profile.WorkArrangement arrangement) => arrangement switch
  {
