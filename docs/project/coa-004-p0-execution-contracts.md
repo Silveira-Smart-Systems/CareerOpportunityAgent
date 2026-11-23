@@ -21,7 +21,7 @@ Sources: #48, #49, #77, #89, #90, #94, `AGENTS.md`, `docs/engineering/agent-hand
 1. With neither career profile nor active search preferences, vacancy text alone **must not** prove a user-specific technical or work-model match.
 2. `UnknownNotProven` is distinct from a proven mismatch (`Missing`); unknown evidence scores zero under the current policy and must not be described as negative proof.
 3. Work-mode compatibility must be grounded in both a user's explicit preference and the vacancy's supported evidence. Unknown work arrangement is never silently remote. Distinguish remote, hybrid and onsite when explicitly evidenced; do not implement speculative geospatial routing.
-4. Preserve the current initial scoring weights and score/eligibility distinction. Existing `work-model` hard constraint requires an explicit decision: **proposed B1 behavior** is that no explicit user work-mode preference means *no work-model hard constraint*, while a declared preference requires a proven compatible mode for eligibility. Do not code this semantic change before PO/architect acceptance.
+4. **D1 accepted by PO (2026-11-23):** The user-facing work-mode choice includes **Remote / Hybrid / Onsite / No preference** (Portuguese: Remoto / Híbrido / Presencial / Sem preferência). **No preference** means no work-mode eligibility restriction; it does **not** assert that the opportunity's work mode is known or matched. Model it as absence of a work-mode restriction, not necessarily a fourth `SearchWorkMode` enum value. When the user explicitly selects permitted modes, eligibility requires proven compatibility; unknown job work mode remains `UnknownNotProven` and does not satisfy a declared hard constraint. Preserve existing scoring weights and distinguish score from eligibility. Inspect current multi-select preferences and preserve support for multiple permitted modes (e.g. Remote + Hybrid), rather than inadvertently restricting the domain to a single mode.
 5. Preserve deterministic, owner-scoped assessments; two users may receive different assessments for the same opportunity. No user-independent default scoring.
 6. Do not implement B2 persisted provenance, freshness, recalculation infrastructure or public schema evolution in B1.
 
@@ -58,7 +58,7 @@ Existing GitHub-mediated handoff uses `[COA:CODEX-TASK]`, `[COA:CODEX-RESULT]`, 
 
 ## Open PO acceptance decisions
 
-- **D1:** Accept conditional work-model hard constraint: apply it only when user preferences explicitly declare allowed work modes; otherwise leave work-model unknown but do not disqualify by that absent preference?
+- **D1 — ACCEPTED (2026-11-23):** Explicit UI option **Sem preferência**; no work-mode eligibility restriction, with unknown vacancy evidence still `UnknownNotProven`; retain existing multi-mode capability.
 - **D2:** Accept B1/F1 bounded scopes and unchanged public API contract as written?
 - **D3:** Confirm F1 may proceed with incremental implementation before the full Figma high-fidelity approval, using existing approved UX baseline, while #77 high-fidelity design remains separate?
 
