@@ -1,6 +1,6 @@
 # COA-004 — P0 execution contracts (proposal)
 
-Status: **Proposed — Product Owner acceptance checkpoint**  
+Status: **P0 D1–D3 accepted by Product Owner (2026-11-23); implementation authorized within bounded scope**  
 Date: 2026-11-23  
 Baseline: `main` after merged PR #91.  
 Sources: #48, #49, #77, #89, #90, #94, `AGENTS.md`, `docs/engineering/agent-handoff-protocol.md`.
@@ -59,7 +59,7 @@ Existing GitHub-mediated handoff uses `[COA:CODEX-TASK]`, `[COA:CODEX-RESULT]`, 
 ## Open PO acceptance decisions
 
 - **D1 — ACCEPTED (2026-11-23):** Explicit UI option **Sem preferência**; no work-mode eligibility restriction, with unknown vacancy evidence still `UnknownNotProven`; retain existing multi-mode capability.
-- **D2:** Accept B1/F1 bounded scopes and unchanged public API contract as written?
-- **D3:** Confirm F1 may proceed with incremental implementation before the full Figma high-fidelity approval, using existing approved UX baseline, while #77 high-fidelity design remains separate?
+- **D2 — ACCEPTED (2026-11-23):** B1/F1 bounded scopes, separate Draft PRs, unchanged public HTTP API contract, independent review and CI.
+- **D3 — ACCEPTED (2026-11-23):** Incremental existing-Blazor implementation may proceed before full high-fidelity Figma approval, within F1 bounds; #77 design track remains separate.
 
-No B1/F1 runtime code changes until these decisions are accepted and documented.
+D1–D3 are now accepted and documented. B1/F1 may start scoped implementation on independent branches/Draft PRs, subject to repository instructions and quality gates; no merge or deployment authorization.
