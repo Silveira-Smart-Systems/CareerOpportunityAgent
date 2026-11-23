@@ -12,20 +12,27 @@
     {
         <p class="loading-state" role="status">Loading opportunity…</p>
     }
-    else if (error is not null)
+    else if (failure is not null)
     {
         <section class="message-state error-state" role="alert" aria-labelledby="load-error-heading">
-            <h1 id="load-error-heading">Opportunity unavailable</h1>
-            <p>@error</p>
-            <button type="button" @onclick="LoadAsync">Retry</button>
+            <h1 id="load-error-heading">@failure.Heading</h1>
+            <p>@failure.Message</p>
+            @if (failure.RequiresSignIn)
+            {
+                <p><a href="/login">Sign in again</a></p>
+            }
+            else if (failure.CanRetry)
+            {
+                <button type="button" @onclick="LoadAsync">Retry</button>
+            }
             <p><a href="/opportunities">Back to opportunities</a></p>
         </section>
     }
     else if (item is null)
     {
         <section class="message-state" aria-labelledby="not-found-heading">
-            <h1 id="not-found-heading">Opportunity not found</h1>
-            <p>This opportunity is unavailable or no longer belongs to your workspace.</p>
+            <h1 id="not-found-heading">@OpportunityPresentation.DescribeNotFound().Heading</h1>
+            <p>@OpportunityPresentation.DescribeNotFound().Message</p>
             <a href="/opportunities">Back to opportunities</a>
         </section>
     }
@@ -95,7 +102,7 @@
 
     private ScoredOpportunity? item;
     private bool loading = true;
-    private string? error;
+    private RequestFailurePresentation? failure;
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
@@ -103,7 +110,7 @@
     {
         loading = true;
         item = null;
-        error = null;
+        failure = null;
 
         try
         {
@@ -111,7 +118,7 @@
         }
         catch (Exception exception)
         {
-            error = OpportunityPresentation.DescribeLoadFailure(exception);
+            failure = OpportunityPresentation.DescribeRequestFailure(exception);
         }
         finally
         {

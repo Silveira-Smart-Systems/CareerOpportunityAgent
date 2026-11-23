@@ -53,9 +53,16 @@
         <p class="status-message success" role="status">@successMessage</p>
     }
 
-    @if (!string.IsNullOrWhiteSpace(importErrorMessage))
+    @if (importFailure is not null)
     {
-        <p class="status-message error" role="alert">@importErrorMessage</p>
+        <section class="status-message error" role="alert">
+            <strong>@importFailure.Heading</strong>
+            <p>@importFailure.Message</p>
+            @if (importFailure.RequiresSignIn)
+            {
+                <p><a href="/login">Sign in again</a></p>
+            }
+        </section>
     }
 
     <section aria-labelledby="imported-heading" aria-busy="@isLoading">
@@ -71,12 +78,19 @@
         {
             <p class="loading-state" role="status">Loading opportunities…</p>
         }
-        else if (!string.IsNullOrWhiteSpace(listErrorMessage))
+        else if (listFailure is not null)
         {
             <section class="list-error" role="alert" aria-labelledby="list-error-heading">
-                <h3 id="list-error-heading">Opportunities unavailable</h3>
-                <p>@listErrorMessage</p>
-                <button type="button" @onclick="LoadOpportunitiesAsync">Retry</button>
+                <h3 id="list-error-heading">@listFailure.Heading</h3>
+                <p>@listFailure.Message</p>
+                @if (listFailure.RequiresSignIn)
+                {
+                    <p><a href="/login">Sign in again</a></p>
+                }
+                else if (listFailure.CanRetry)
+                {
+                    <button type="button" @onclick="LoadOpportunitiesAsync">Retry</button>
+                }
             </section>
         }
         else if (opportunities.Count == 0)
@@ -145,8 +159,8 @@
     private IReadOnlyList<ScoredOpportunity> opportunities = [];
     private bool isImporting;
     private bool isLoading = true;
-    private string? importErrorMessage;
-    private string? listErrorMessage;
+    private RequestFailurePresentation? importFailure;
+    private RequestFailurePresentation? listFailure;
     private string? successMessage;
 
     protected override Task OnInitializedAsync() => LoadOpportunitiesAsync();
@@ -154,7 +168,7 @@
     private async Task ImportAsync()
     {
         isImporting = true;
-        importErrorMessage = null;
+        importFailure = null;
         successMessage = null;
 
         try
@@ -167,7 +181,7 @@
         }
         catch (Exception exception)
         {
-            importErrorMessage = OpportunityPresentation.DescribeLoadFailure(exception);
+            importFailure = OpportunityPresentation.DescribeRequestFailure(exception);
         }
         finally
         {
@@ -178,7 +192,7 @@
     private async Task LoadOpportunitiesAsync()
     {
         isLoading = true;
-        listErrorMessage = null;
+        listFailure = null;
 
         try
         {
@@ -186,7 +200,7 @@
         }
         catch (Exception exception)
         {
-            listErrorMessage = OpportunityPresentation.DescribeLoadFailure(exception);
+            listFailure = OpportunityPresentation.DescribeRequestFailure(exception);
         }
         finally
         {

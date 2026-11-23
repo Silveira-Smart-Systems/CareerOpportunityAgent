@@ -3,6 +3,7 @@ using COA.Domain.Matching;
 namespace COA.Web.Components;
 
 public sealed record EvidencePresentation(string Label, string Description, string CssClass);
+public sealed record RequestFailurePresentation(string Heading, string Message, bool CanRetry, bool RequiresSignIn = false);
 
 public static class OpportunityPresentation
 {
@@ -16,15 +17,36 @@ public static class OpportunityPresentation
     public static string EligibilityLabel(bool eligible) => eligible ? "Eligible" : "Not eligible";
 
     public static string EligibilityDescription(bool eligible) => eligible
-        ? "All required criteria have matching evidence."
+        ? "No required criterion lacks matching evidence. Eligibility can be true even with a 0% score."
         : "At least one required criterion does not have matching evidence.";
 
-    public static string DescribeLoadFailure(Exception exception) => exception switch
+    public static RequestFailurePresentation DescribeRequestFailure(Exception exception) => exception switch
     {
-        Api.CoaApiAuthenticationException => "Your session needs a new sign-in before it can access the COA API.",
-        Api.CoaApiAuthorizationException => "You are not authorized to access this opportunity. Its details are not shown.",
-        Api.CoaApiConflictException => "This opportunity has already been imported.",
-        Api.CoaApiRequestException requestException => $"The COA API could not complete the request (HTTP {(int)requestException.StatusCode}).",
-        _ => "The opportunity request could not be completed. Please try again."
+        Api.CoaApiAuthenticationException => new(
+            "Sign in required",
+            "Your session needs a new sign-in before it can access the COA API.",
+            CanRetry: false,
+            RequiresSignIn: true),
+        Api.CoaApiAuthorizationException => new(
+            "Access denied",
+            "You are not authorized to access this opportunity. Its details are not shown.",
+            CanRetry: false),
+        Api.CoaApiConflictException => new(
+            "Opportunity already imported",
+            "This opportunity has already been imported.",
+            CanRetry: false),
+        Api.CoaApiRequestException => new(
+            "Opportunity unavailable",
+            "The COA API could not complete the request. Please try again.",
+            CanRetry: true),
+        _ => new(
+            "Opportunity unavailable",
+            "The opportunity request could not be completed. Please try again.",
+            CanRetry: true)
     };
+
+    public static RequestFailurePresentation DescribeNotFound() => new(
+        "Opportunity not found",
+        "This opportunity is unavailable or no longer belongs to your workspace.",
+        CanRetry: false);
 }
