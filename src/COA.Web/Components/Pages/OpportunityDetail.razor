@@ -2,7 +2,127 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @using COA.Web.Api
+@using COA.Web.Components
 @inject CoaApiClient Api
+
 <PageTitle>Opportunity</PageTitle>
-@if (loading) { <p role="status">Loading opportunity…</p> } else if (error is not null) { <p role="alert">@error</p><button @onclick="LoadAsync">Retry</button> } else if (item is null) { <p role="alert">Opportunity not found.</p> } else { <h1>@item.Opportunity.Title</h1>@if(item.Opportunity.IsSynthetic){<p><strong>Synthetic demo</strong></p>}<p>@item.Opportunity.Description</p><p>Score: @item.Assessment.Score% — @(item.Assessment.Eligible?"Eligible":"Not eligible")</p><ul>@foreach(var criterion in item.Assessment.Criteria){<li>@criterion.Code: @criterion.Evidence</li>}</ul><a href="/opportunities">Back to opportunities</a> }
-@code { [Parameter] public Guid Id {get;set;} private ScoredOpportunity? item; private bool loading=true; private string? error; protected override Task OnParametersSetAsync()=>LoadAsync(); private async Task LoadAsync(){loading=true;item=null;error=null;try{item=await Api.GetOpportunityAsync(Id);}catch{error="The opportunity could not be loaded.";}finally{loading=false;}} }
+
+<main class="opportunity-detail" aria-busy="@loading">
+    @if (loading)
+    {
+        <p class="loading-state" role="status">Loading opportunity…</p>
+    }
+    else if (failure is not null)
+    {
+        <section class="message-state error-state" role="alert" aria-labelledby="load-error-heading">
+            <h1 id="load-error-heading">@failure.Heading</h1>
+            <p>@failure.Message</p>
+            @if (failure.RequiresSignIn)
+            {
+                <p><a href="/login">Sign in again</a></p>
+            }
+            else if (failure.CanRetry)
+            {
+                <button type="button" @onclick="LoadAsync">Retry</button>
+            }
+            <p><a href="/opportunities">Back to opportunities</a></p>
+        </section>
+    }
+    else if (item is null)
+    {
+        <section class="message-state" aria-labelledby="not-found-heading">
+            <h1 id="not-found-heading">@OpportunityPresentation.DescribeNotFound().Heading</h1>
+            <p>@OpportunityPresentation.DescribeNotFound().Message</p>
+            <a href="/opportunities">Back to opportunities</a>
+        </section>
+    }
+    else
+    {
+        <header class="detail-header">
+            <div>
+                <p class="eyebrow">Imported opportunity</p>
+                <h1>@item.Opportunity.Title</h1>
+                @if (item.Opportunity.IsSynthetic)
+                {
+                    <p class="synthetic-label">Synthetic demo</p>
+                }
+            </div>
+            <a class="external-link" href="@item.Opportunity.OriginalUrl" target="_blank" rel="noopener noreferrer">Open original opportunity <span class="visually-hidden">(opens in a new tab)</span></a>
+        </header>
+
+        <section class="assessment-summary" aria-labelledby="assessment-heading">
+            <h2 id="assessment-heading">Match assessment</h2>
+            <div class="assessment-values">
+                <div>
+                    <span class="assessment-label">Match score</span>
+                    <strong class="score">@item.Assessment.Score.ToString("0.##")%</strong>
+                    <p>Score reflects evidence-backed matches. It does not determine eligibility on its own.</p>
+                </div>
+                <div>
+                    <span class="assessment-label">Required criteria</span>
+                    <strong class="eligibility @(item.Assessment.Eligible ? "eligible" : "ineligible")">@OpportunityPresentation.EligibilityLabel(item.Assessment.Eligible)</strong>
+                    <p>@OpportunityPresentation.EligibilityDescription(item.Assessment.Eligible)</p>
+                </div>
+            </div>
+        </section>
+
+        <section aria-labelledby="evidence-heading">
+            <h2 id="evidence-heading">Evidence by criterion</h2>
+            <p>Unknown is not a negative result: it means the available assessment does not prove the criterion.</p>
+            <ul class="criteria-list">
+                @foreach (var criterion in item.Assessment.Criteria)
+                {
+                    var evidence = OpportunityPresentation.Describe(criterion.Evidence);
+                    <li>
+                        <div>
+                            <strong>@criterion.Code</strong>
+                            @if (criterion.IsHardConstraint)
+                            {
+                                <span class="hard-constraint">Required</span>
+                            }
+                        </div>
+                        <span class="criterion-state @evidence.CssClass">@evidence.Label</span>
+                        <span class="criterion-description">@evidence.Description Weight: @criterion.Weight%.</span>
+                    </li>
+                }
+            </ul>
+        </section>
+
+        <section class="opportunity-description" aria-labelledby="description-heading">
+            <h2 id="description-heading">Description</h2>
+            <p>@item.Opportunity.Description</p>
+        </section>
+
+        <p><a href="/opportunities">Back to opportunities</a></p>
+    }
+</main>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private ScoredOpportunity? item;
+    private bool loading = true;
+    private RequestFailurePresentation? failure;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        item = null;
+        failure = null;
+
+        try
+        {
+            item = await Api.GetOpportunityAsync(Id);
+        }
+        catch (Exception exception)
+        {
+            failure = OpportunityPresentation.DescribeRequestFailure(exception);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}
