@@ -14,5 +14,62 @@ public sealed class OpportunityUseCases(IOpportunityStore store, IProfileStore? 
  public async Task<IReadOnlyList<(OpportunityModel Opportunity, MatchAssessment Assessment)>> ListScoredAsync(OwnerIdentity owner,CancellationToken ct=default){var all=await store.ListAsync(owner,ct);var context=await LoadContextAsync(owner,ct);return all.Select(item=>(item,Assess(item,context.Profile,context.Active))).OrderByDescending(x=>x.Item2.Eligible).ThenByDescending(x=>x.Item2.Score).ToArray();}
  private async Task<MatchAssessment> AssessAsync(OwnerIdentity owner,OpportunityModel opportunity,CancellationToken ct){var context=await LoadContextAsync(owner,ct);return Assess(opportunity,context.Profile,context.Active);}
  private async Task<(COA.Domain.Profile.CareerProfile? Profile,COA.Domain.SearchProfiles.JobSearchProfile? Active)> LoadContextAsync(OwnerIdentity owner,CancellationToken ct){var profile=profileStore is null?null:await profileStore.GetCurrentAsync(owner,ct);var active=searchProfileStore is null?null:(await searchProfileStore.ListAsync(owner,ct)).Where(x=>x.IsActive).OrderByDescending(x=>x.UpdatedAtUtc).ThenBy(x=>x.Id).FirstOrDefault();return(profile,active);}
- private static MatchAssessment Assess(OpportunityModel opportunity,COA.Domain.Profile.CareerProfile? profile,COA.Domain.SearchProfiles.JobSearchProfile? active){var evidence=new Dictionary<string,EvidenceState>{{"technical",EvidenceState.UnknownNotProven},{"commercial",EvidenceState.UnknownNotProven},{"work-model",EvidenceState.UnknownNotProven},{"seniority",EvidenceState.UnknownNotProven},{"career-alignment",EvidenceState.UnknownNotProven}};var text=$"{opportunity.Title} {opportunity.Description}";if(profile is null&&active is null){evidence["technical"]=text.Contains(".NET",StringComparison.OrdinalIgnoreCase)?EvidenceState.Matched:EvidenceState.UnknownNotProven;evidence["work-model"]=text.Contains("remote",StringComparison.OrdinalIgnoreCase)?EvidenceState.Matched:EvidenceState.UnknownNotProven;}if(profile?.Evidence.Any(x=>x.Claim.Length>2&&text.Contains(x.Claim,StringComparison.OrdinalIgnoreCase))==true)evidence["technical"]=EvidenceState.Matched;if(active is not null){if(active.Preferences.TargetRoles.Concat(active.Preferences.Skills).Any(x=>x.Length>2&&text.Contains(x,StringComparison.OrdinalIgnoreCase)))evidence["career-alignment"]=EvidenceState.Matched;if(active.Preferences.WorkModes.Contains(COA.Domain.SearchProfiles.SearchWorkMode.Remote)&&text.Contains("remote",StringComparison.OrdinalIgnoreCase))evidence["work-model"]=EvidenceState.Matched;}return ScoringPolicy.Initial.Evaluate(evidence,["work-model"]);}
+ private static MatchAssessment Assess(OpportunityModel opportunity,COA.Domain.Profile.CareerProfile? profile,COA.Domain.SearchProfiles.JobSearchProfile? active)
+ {
+  var evidence=new Dictionary<string,EvidenceState>{{"technical",EvidenceState.UnknownNotProven},{"commercial",EvidenceState.UnknownNotProven},{"work-model",EvidenceState.UnknownNotProven},{"seniority",EvidenceState.UnknownNotProven},{"career-alignment",EvidenceState.UnknownNotProven}};
+  var text=$"{opportunity.Title} {opportunity.Description}";
+
+  if(profile?.Evidence.Any(x=>x.Claim.Length>2&&text.Contains(x.Claim,StringComparison.OrdinalIgnoreCase))==true)
+   evidence["technical"]=EvidenceState.Matched;
+  if(active is not null&&active.Preferences.TargetRoles.Concat(active.Preferences.Skills).Any(x=>x.Length>2&&text.Contains(x,StringComparison.OrdinalIgnoreCase)))
+   evidence["career-alignment"]=EvidenceState.Matched;
+
+  var workMode=WorkModePreference(profile,active);
+  evidence["work-model"]=workMode.HasConflict?EvidenceState.Missing:AssessWorkMode(text,workMode.Modes);
+  return ScoringPolicy.Initial.Evaluate(evidence,workMode.IsHardConstraint?["work-model"]:[]);
+ }
+
+ // An active search profile owns work-mode selection: an empty selection is explicit no preference
+ // and suppresses the CareerProfile's soft arrangement. RemoteOnly remains a separate hard limit.
+ private static WorkModeDecision WorkModePreference(COA.Domain.Profile.CareerProfile? profile,COA.Domain.SearchProfiles.JobSearchProfile? active)
+ {
+  if(active is not null)
+  {
+   var selected=active.Preferences.WorkModes.ToHashSet();
+   if(profile?.Preferences.RemoteOnly!=true)return new(selected,selected.Count>0,false);
+   if(selected.Count==0)return new(WorkModes(COA.Domain.SearchProfiles.SearchWorkMode.Remote),true,false);
+   if(!selected.Contains(COA.Domain.SearchProfiles.SearchWorkMode.Remote))return new(WorkModes(),true,true);
+   return new(WorkModes(COA.Domain.SearchProfiles.SearchWorkMode.Remote),true,false);
+  }
+
+  if(profile?.Preferences.RemoteOnly==true)
+   return new(WorkModes(COA.Domain.SearchProfiles.SearchWorkMode.Remote),true,false);
+  return profile is null?new(WorkModes(),false,false):new(WorkModes(ToSearchWorkMode(profile.Preferences.PreferredArrangement)),false,false);
+ }
+
+ private static EvidenceState AssessWorkMode(string text,IReadOnlySet<COA.Domain.SearchProfiles.SearchWorkMode> permittedModes)
+ {
+  if(permittedModes.Count==0)return EvidenceState.UnknownNotProven;
+  if(HasAmbiguousWorkModeSignal(text))return EvidenceState.UnknownNotProven;
+  var supportedModes=new HashSet<COA.Domain.SearchProfiles.SearchWorkMode>();
+  if(System.Text.RegularExpressions.Regex.IsMatch(text,@"\bremote\b",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant))supportedModes.Add(COA.Domain.SearchProfiles.SearchWorkMode.Remote);
+  if(System.Text.RegularExpressions.Regex.IsMatch(text,@"\bhybrid\b",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant))supportedModes.Add(COA.Domain.SearchProfiles.SearchWorkMode.Hybrid);
+  if(System.Text.RegularExpressions.Regex.IsMatch(text,@"\bon[- ]?site\b",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant))supportedModes.Add(COA.Domain.SearchProfiles.SearchWorkMode.Onsite);
+  return supportedModes.Count!=1?EvidenceState.UnknownNotProven:supportedModes.Overlaps(permittedModes)?EvidenceState.Matched:EvidenceState.Missing;
+ }
+
+ // Free text cannot reliably resolve negation or conflicting arrangements, so it never proves compatibility.
+ private static bool HasAmbiguousWorkModeSignal(string text) => System.Text.RegularExpressions.Regex.IsMatch(text,@"\b(?:not|no|non)[ -]?(?:remote|hybrid|on[- ]?site)\b|\b(?:remote|hybrid|on[- ]?site)(?:\s+work)?\s+(?:is\s+)?(?:not(?:\s+available)?|unavailable)\b",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+ private static IReadOnlySet<COA.Domain.SearchProfiles.SearchWorkMode> WorkModes(params COA.Domain.SearchProfiles.SearchWorkMode[] modes) => modes.ToHashSet();
+
+ private sealed record WorkModeDecision(IReadOnlySet<COA.Domain.SearchProfiles.SearchWorkMode> Modes,bool IsHardConstraint,bool HasConflict);
+
+ private static COA.Domain.SearchProfiles.SearchWorkMode ToSearchWorkMode(COA.Domain.Profile.WorkArrangement arrangement) => arrangement switch
+ {
+  COA.Domain.Profile.WorkArrangement.Remote=>COA.Domain.SearchProfiles.SearchWorkMode.Remote,
+  COA.Domain.Profile.WorkArrangement.Hybrid=>COA.Domain.SearchProfiles.SearchWorkMode.Hybrid,
+  COA.Domain.Profile.WorkArrangement.OnSite=>COA.Domain.SearchProfiles.SearchWorkMode.Onsite,
+  _=>throw new ArgumentOutOfRangeException(nameof(arrangement))
+ };
 }

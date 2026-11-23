@@ -38,7 +38,7 @@ public sealed class ApiOpportunityEndpointsTests(SqlServerFixture fixture) : ICl
         Assert.Equal(HttpStatusCode.Created, create.StatusCode);
         Assert.Equal(HttpStatusCode.OK, list.StatusCode);
         Assert.Equal("Remote .NET Engineer", opportunities[0].GetProperty("opportunity").GetProperty("title").GetString());
-        Assert.Equal(55m, opportunities[0].GetProperty("assessment").GetProperty("score").GetDecimal());
+        Assert.Equal(0m, opportunities[0].GetProperty("assessment").GetProperty("score").GetDecimal());
         Assert.True(opportunities[0].GetProperty("assessment").GetProperty("eligible").GetBoolean());
     }
 
